@@ -20,6 +20,11 @@ class LinkedIn:
         
     def search(self, profile_link : str):
         """Fetch the details of the linkedIN profile and extract important information for LLM"""
+        # with open('C:\\Machine Learning\\my-email-generator\\app\\result.json', 'r') as f:
+        #     linkedin_results = json.loads(f.read())
+        # f.close()
+        # summary = self._compile_summary(linkedin_results)
+        # return summary
         if not self.wrapper or not profile_link:
             print(f"Cant Search , Wrapper {self.wrapper}, profile_url : {profile_link}")
             return

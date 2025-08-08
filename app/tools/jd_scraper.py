@@ -103,7 +103,7 @@ class Scraper:
 
 
 if __name__ == '__main__':
-    url = "https://jobs.boeing.com/job/bengaluru/associate-software-developer-java-full-stack/185/84451273568"
+    url = "https://www.linkedin.com/jobs/view/4278200847/?alternateChannel=search&eBP=CwEAAAGYgq8JD6GsDDh7vXI3HzbNam1QyF-JEI-4ECD26N8pGD13VEzd1lz1gAZrzQZxdWs9NSDOIM6RFD1GkpPK47m9biT-pHFUbvX78EsL3-E3XMzSI81b7sKvn8bZ0-lVtNYQm4O_kacLZcK61gCynLvYxfiBDeJbQr0UoGucL_bTNFe0gfj4WPJmx5GyMJmTfyHmBqggexEHDENTUgHvbeqF7nFJFH6nosheFSyesDYdHmf2OyOQUt9UnlV3oayCqCeWAN_qewQvgh3yIKLpgbalRI8yYghURu_07SZ8j2ddcAOjUFlvIfyILFErC-0rvwAXRId54WkVFnGg17dGJprmoQyvzFkIYsEKM36QKT_SBZBgK1xAQKd3ew0NUTLxqNBpltz4zaTL1MRHWfnZuAe1EnY9tDACUpfNZttIz_5CZ1PPlxDBBI8x45T7crPGG7AHaxhflTiW5dLSrY4UnQQENohy3SshXW1iWw&refId=FJ1FlVuOiHi5vc1YAXoyjQ%3D%3D&trackingId=OrgjObJiq9sYZTLich8Ogw%3D%3D&lipi=urn%3Ali%3Apage%3Ad_flagship3_jobs_discovery_jymbii%3By%2FeEXZjZR%2BWZKtcQ%2Bnia4w%3D%3D"
     scraper = Scraper()
     data = scraper.scrape(url)
     print("\n--- FINAL SCRAPED DATA ---")
