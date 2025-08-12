@@ -1,0 +1,669 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+api/health.py
+api/v1/job_description.py
+api/v1/linkedin.py
+api/v1/resume.py
+core/email_generator.py
+main.py
+result.json
+tools/jd_scraper.py
+tools/jd_to_json.py
+tools/linkedin_scraper.py
+tools/linkedin.py
+tools/resume_parser.py
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="api/health.py">
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+
+router = APIRouter()
+
+@router.get("/health", tags=["Health Check"])
+def health_check():
+    """
+    Health check endpoint to verify the API is running.
+    Returns a simple JSON response indicating the service is up.
+    """
+    return JSONResponse(content={"status": "ok", "message": "API is running"}, status_code=200)
+</file>
+
+<file path="api/v1/job_description.py">
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
+from loguru import logger
+
+router = APIRouter()
+
+@router.post('/get-job-description', tags=['Job Description'])
+def get_job_description(url: str):
+    """
+    Endpoint to scrape a job descrption from a given URL.
+    Expects a job URL as input.
+    """
+    from app.tools.jd_scraper import Scraper
+    from app.tools.jd_to_json import JD2JSON
+
+    if not url:
+        logger.error("Job URL is required")
+        raise HTTPException(status_code=400, detail="Job URL is required")
+    scraper = Scraper()
+    scrape_res = scraper.scrape(url)
+    if not scrape_res:
+        logger.error("Failed to scrape the job description")
+        raise HTTPException(status_code=500, detail="Failed to scrape the job description")
+    
+    jd2json = JD2JSON()
+    jd_json = jd2json.convert(scrape_res)
+    if not jd_json:
+        logger.error("Failed to convert job description to JSON")
+        raise HTTPException(status_code=500, detail="Failed to convert job description to JSON")
+    return JSONResponse(content=jd_json, status_code=200)
+
+
+@router.post('/get-job-description-json', tags=['Job Description'])
+def get_jd_json(jd_text : str):
+    """
+    Endpoint to convert a job description text to JSON format.
+    Expects job description text as input.
+    """
+    from app.tools.jd_to_json import JD2JSON
+
+    if not jd_text:
+        logger.error("Job description text is required")
+        raise HTTPException(status_code=400, detail="Job description text is required")
+
+    jd2json = JD2JSON()
+    jd_json = jd2json.convert(jd_text)
+    
+    if not jd_json:
+        logger.error("Failed to convert job description to JSON")
+        raise HTTPException(status_code=500, detail="Failed to convert job description to JSON")
+    
+    return JSONResponse(content=jd_json, status_code=200)
+</file>
+
+<file path="api/v1/linkedin.py">
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
+from loguru import logger
+
+router = APIRouter()
+
+@router.post('/linkedin', tags=["LinkedIn"])
+def search_linkedin(recruiter_url: str):
+    """
+    Endpoint to search for a recruiter on LinkedIn.
+    Expects a recruiter URL as input.
+    Returns the recruiter's information in JSON format.
+    """
+    from app.tools.linkedin import LinkedIn
+
+    if not recruiter_url:
+        logger.error("Recruiter URL is required")
+        raise HTTPException(status_code=400, detail="Recruiter URL is required")
+
+    linkedin = LinkedIn()
+    recruiter_info = linkedin.search(recruiter_url)
+
+    if not recruiter_info:
+        raise HTTPException(status_code=404, detail="Recruiter not found")
+
+    return JSONResponse(content=recruiter_info, status_code=200)
+</file>
+
+<file path="api/v1/resume.py">
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import JSONResponse
+from loguru import logger
+from app.tools.resume_parser import ResumeParser
+
+router = APIRouter()
+
+@router.post('/resume', tags=['Resume'])
+async def process_resume(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        if not file.content_type or not file.content_type.startswith('application/pdf'):
+            logger.error("Invalid file type. Only PDF files are allowed.")
+            raise HTTPException(status_code=400, detail="Invalid file type. Only PDF files are allowed.")
+        temp_path = f"/tmp/{file.filename}"
+        with open(temp_path, "wb") as f:
+            f.write(contents)
+        parser = ResumeParser()
+        resume_text = parser.parse(temp_path)
+        return JSONResponse(content={"resume_text": resume_text})
+    except Exception as e:
+        logger.error(f"Error parsing resume: {e}")
+        raise HTTPException(status_code=500, detail="Failed to parse resume")
+</file>
+
+<file path="core/email_generator.py">
+from app.tools.jd_scraper import Scraper
+from app.tools.jd_to_json import JD2JSON
+from app.tools.linkedin import LinkedIn
+from app.tools.resume_parser import ResumeParser
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+from typing import Optional
+
+from threading import Thread
+
+from app.tools.jd_scraper import Scraper
+from app.tools.jd_to_json import JD2JSON
+from app.tools.linkedin import LinkedIn
+from app.tools.resume_parser import ResumeParser
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+from typing import Optional
+
+from threading import Thread
+
+class EmailGenerator:
+    def __init__(self):
+        self.scraper = Scraper()
+        self.jd2json = JD2JSON()
+        self.linkedin = LinkedIn()
+        self.resume_parser = ResumeParser()
+        self.llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash')
+
+    def scrape_jd(self, url: str, result_holder: dict):
+        scrape_res = self.scraper.scrape(url)
+        jd_json = self.jd2json.convert(scrape_res)
+        result_holder['jd_json'] = jd_json
+
+    def scrape_linkedin(self, recruiter_url: str, result_holder: dict):
+        recruiter_info = self.linkedin.search(recruiter_url)
+        result_holder['recruiter_info'] = recruiter_info
+
+    def parse_resume(self, resume_path: str, result_holder: dict):
+        resume_text = self.resume_parser.parse(resume_path)
+        result_holder['resume_text'] = resume_text
+
+    def generate(self, url: str, recruiter_url: str, resume_path: str) -> str:
+        results = {}
+
+        # Create threads
+        jd_thread = Thread(target=self.scrape_jd, args=(url, results))
+        linkedin_thread = Thread(target=self.scrape_linkedin, args=(recruiter_url, results))
+        resume_thread = Thread(target=self.parse_resume, args=(resume_path, results))
+
+        # Start threads
+        jd_thread.start()
+        linkedin_thread.start()
+        resume_thread.start()
+
+        # Wait for all threads to finish
+        jd_thread.join()
+        linkedin_thread.join()
+        resume_thread.join()
+
+        # Get results
+        jd_json = results.get('jd_json', {})
+        recruiter_info = results.get('recruiter_info', {})
+        resume_text = results.get('resume_text', "")
+
+        # 1. Define the prompt with placeholders, NOT an f-string
+        prompt = ChatPromptTemplate.from_messages([
+            ("system",
+             "You are an expert career assistant. "
+             "Given the job description, recruiter profile, and resume, "
+             "curate a professional email for the user to send to the recruiter. "
+             "The email should be concise, highlight relevant experience, and express interest in the role."),
+            ("human",
+             "Job Description JSON:\n{jd_json}\n\n"
+             "Recruiter Info:\n{recruiter_info}\n\n"
+             "Resume:\n{resume_text}\n\n"
+             "Generate the email below:")
+        ])
+        
+        chain = prompt | self.llm
+        
+        # 2. Pass a dictionary with the data to the invoke method
+        input_data = {
+            "jd_json": jd_json,
+            "recruiter_info": recruiter_info,
+            "resume_text": resume_text
+        }
+        result = chain.invoke(input_data)
+        
+        return result.content if hasattr(result, "content") else result
+    
+
+# Example usage:
+if __name__ == "__main__":
+    eg = EmailGenerator()
+    jd_url = "https://www.linkedin.com/jobs/view/4271552272/"
+    recruiter_url = "https://www.linkedin.com/in/a-g-somaiah-00146952/"
+    resume_path = "C:\\Users\\jaius\\Downloads\\SDE.pdf"
+    email = eg.generate(jd_url, recruiter_url, resume_path)
+    print(email)
+</file>
+
+<file path="main.py">
+from loguru import logger
+import uvicorn
+from app.api import health
+
+def create_app():
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    app = FastAPI(title="Email Generator API")
+
+    app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "*"
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "Origin",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers",
+    ])
+    # Include routers here
+    app.include_router(health.router, prefix="/api", tags=["Health Check"])
+
+    return app
+    
+
+if __name__ == '__main__':
+    logger.info("Starting Email Generator API")
+    app = create_app()
+    uvicorn.run(app, host="127.0.0.1", port=5000, log_level="info")
+</file>
+
+<file path="result.json">
+{"id": "jai-soni-879764257", "name": "Jai Soni", "city": "Pune, Maharashtra, India", "country_code": "IN", "position": "Software Engineer @FOG Technologies | Full Stack Developer | AI Enthusiast", "about": "I am a dedicated Full Stack Developer passionate about building efficient and scalable web applications. Currently, I\u2019m part of the team at Awajahi, where I lead the development of a comprehensive logistics management platform. Working in a dynamic startup environment has honed my ability to create user-focused solutions while ensuring performance and scalability. At Awajahi, I\u2019ve had the opportunity to: Optimize database performance, improving response times by 40% for seamless user experiences. Implement advanced state management techniques to reduce API calls and enhance efficiency. Design secure, scalable infrastructures using AWS S3 and modern authentication protocols. What drives me is the challenge of solving real-world problems through technology and collaborating with cross-functional teams to deliver impactful results. Outside of work, I\u2019m always exploring emerging technologies to stay ahead in the fast-evolving tech landscape.", "current_company": {"name": "FOG Technologies", "company_id": "fog-technologies", "title": "Software Engineer", "location": "Surat"}, "experience": [{"title": "Software Engineer", "location": "Surat", "description_html": null, "start_date": "Feb 2025", "end_date": "Present", "company": "FOG Technologies", "company_id": "fog-technologies", "url": "https://in.linkedin.com/company/fog-technologies", "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQFLffMd4M72kQ/company-logo_100_100/company-logo_100_100/0/1712663202420/fog_technologies_logo?e=2147483647&v=beta&t=Waqek1ci2VI2YfvMMjZfBva17MqSyNXTOsC6flvivrE"}, {"title": "Awajahi", "description_html": null, "duration": "9 months", "positions": [{"subtitle": "Awajahi", "meta": "Aug 2024 - Feb 2025 7 months", "start_date": "Aug 2024", "end_date": "Feb 2025", "title": "Technical Lead", "description_html": null, "location": null}, {"subtitle": "Awajahi", "meta": "Jun 2024 - Aug 2024 3 months", "start_date": "Jun 2024", "end_date": "Aug 2024", "title": "Full Stack Developer", "description_html": "<br> <!---->", "location": null}], "company": "Awajahi", "company_id": "awajahi", "url": "https://www.linkedin.com/company/awajahi?trk=public_profile_experience-group-header", "company_logo_url": null}], "url": "https://www.linkedin.com/in/jai-soni-879764257/", "educations_details": "Shri Vaishnav Vidyapeeth Vishwavidyalaya, Indore", "education": [{"title": "Shri Vaishnav Vidyapeeth Vishwavidyalaya, Indore", "degree": "Bachelor of Technology - BTech", "field": "Computer Science", "url": "https://in.linkedin.com/school/shri-vaishnav-vidyapeeth-vishwavidyalaya/?trk=public_profile_school_profile-section-card_image-click", "start_year": "2021", "end_year": "2025", "description": null, "description_html": null, "institute_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQEOTGUGUyEpLQ/company-logo_100_100/company-logo_100_100/0/1631307274160?e=2147483647&v=beta&t=xczFtpBjCf3VaLTnxIk7QWT-ehm4MHmxT1vVwIrNeww"}], "avatar": "https://media.licdn.com/dms/image/v2/D4D03AQEMmUmpFC3RyQ/profile-displayphoto-scale_200_200/B4DZgSIYWvHAAY-/0/1752650846470?e=2147483647&v=beta&t=vohRmQ0MlPZJ6kQiLGzO5cpdVhpmTzaQOB4u5V16DEw", "certifications": [{"meta": "Issued May 2024 Credential ID 692e68HyrYWhN2jo5 See credential", "subtitle": "Forage", "title": "Accenture Nordics - Developer Job Simulation", "credential_url": "https://forage-uploads-prod.s3.amazonaws.com/completion-certificates/Accenture%20Nordics/PxenP4rHNE6Bh4nQz_Accenture%20Nordics_NQENBGX8K67BvmyKK_1716627087076_completion_certificate.pdf?trk=public_profile_see-credential", "credential_id": "692e68HyrYWhN2jo5"}, {"meta": "Issued May 2024 Credential ID UC-c2810c2f-4a63-4540-a855-3792a6af6c76 See credential", "subtitle": "Udemy", "title": "IntroductiontoCloud Computing on AWS for Beginners [2024]", "credential_url": "https://www.linkedin.com/ude.my/UC-c2810c2f-4a63-4540-a855-3792a6af6c76?trk=public_profile_see-credential", "credential_id": "UC-c2810c2f-4a63-4540-a855-3792a6af6c76"}, {"subtitle": "GeeksforGeeks", "title": "Machine Learning and Data Science", "credential_url": null, "credential_id": null}], "followers": 929, "connections": 500, "current_company_company_id": "fog-technologies", "current_company_name": "FOG Technologies", "projects": [{"title": "Malarial Cell Detection", "description": "Malarial Cell Detection using CNN and ANN with test accuracy of more than 85%"}], "location": "Pune", "input_url": "https://www.linkedin.com/in/jai-soni-879764257/", "linkedin_id": "jai-soni-879764257", "activity": [{"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/albinxavier1_closes-vs-code-shuts-down-work-laptop-activity-7356194453579026432-hU6Y", "title": "*closes VS Code. Shuts down work laptop.* Well that was a nice long day! *turns on personal laptop. Opens VS Code*", "img": "https://static.licdn.com/aero-v1/sc/h/53n89ecoxpr1qrki1do3alazb", "id": "7356194453579026432"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/theharishpatel_exciting-update-im-thrilled-to-share-activity-7355280495607197696-BVDU", "title": "\ud83c\udf89 Exciting Update! I\u2019m thrilled to share that my internship at Bridge Healthcare Pvt. Ltd. has officially been upgraded to a paid position!\u2026", "img": "https://media.licdn.com/dms/image/v2/D4D22AQEENIKkr7iPpw/feedshare-shrink_2048_1536/B4DZhM0oivGsAo-/0/1753635523704?e=2147483647&v=beta&t=wXgkAYqQZpDGty7LCN1OwMHJvJgXmGpCIH2vRWVSiUU", "id": "7355280495607197696"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_hiring-referral-job-activity-7352559524131586048-sMgC", "title": "\u274c Most Students Never Get Referred. Here's Why: 1. Cold DMing without context \"Hi, can you refer me?\" = auto-ignore \u2705 Fix: Warm up first. Engage\u2026", "img": "https://media.licdn.com/dms/image/v2/D5622AQFM6ezmHUnz_A/feedshare-shrink_2048_1536/B56ZgmJ6uTHUAo-/0/1752986793662?e=2147483647&v=beta&t=qwwenNKofW_yuUmSeDiYfDOJv5QEQbKrVxQRun1SQ-s", "id": "7352559524131586048"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/albinxavier1_yesterday-i-closed-my-laptop-at-330am-i-activity-7348946591916941313-3ZzN", "title": "yesterday i closed my laptop at 3:30am i was tired, tired af! but one thing that hit me was i was grateful, like i was grateful that when i see so\u2026", "img": "https://media.licdn.com/dms/image/v2/D4E22AQF3QHE12QyYPA/feedshare-shrink_800/B4EZfv7X.bH0Ak-/0/1752077009850?e=2147483647&v=beta&t=uM3yz8GbeV4u0F7UupOBBww3fVQbiWrOYeD073CENxs", "id": "7348946591916941313"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_career-job-fresher-activity-7346761179207258114-wUZ5", "title": "\u201cI\u2019ve applied to 200 jobs, but no response.\u201d I see this message every single day. And every time, my answer is the same: \u201cThe problem isn\u2019t how much\u2026", "img": "https://media.licdn.com/dms/image/v2/D5622AQHXBMc5nw8lKg/feedshare-shrink_1280/B56ZfTwWo0HUAo-/0/1751604360234?e=2147483647&v=beta&t=YT8WuoNuDJAJ-NkGiDzxONIxlTlaE0xgAmmEYhnxTxo", "id": "7346761179207258114"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_career-fresher-job-activity-7346402266125344772-B6nK", "title": "He didn\u2019t buy a fancy course. He didn\u2019t have an inside connection. He just took action \u2014 on the kind of opportunity most people never even see. And\u2026", "img": "https://media.licdn.com/dms/image/v2/D5622AQF0oZNkKJ0avw/feedshare-shrink_800/B56ZfOp7TEHEAg-/0/1751518788567?e=2147483647&v=beta&t=fE4_fks6lRPpZbbHhKuiev0XZKoAdZo_EkjHzV2yhi4", "id": "7346402266125344772"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_hiring-job-fresher-activity-7345676439968497664-jqmA", "title": "The job boards are like the airport. By the time you arrive, your flight\u2019s already gone. \u2708\ufe0f The students landing real roles? \u27a1 They\u2019re doing this\u2026", "img": "https://media.licdn.com/dms/image/v2/D5622AQEfgmgBdL3HXA/feedshare-shrink_2048_1536/B56ZfEVxUCHUAo-/0/1751345737381?e=2147483647&v=beta&t=E2UT8FezZInrppiM1CMNm2I6oetL5NEB_KBWyMCLFl0", "id": "7345676439968497664"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_linkedin-job-resume-activity-7343137891977437184-Hgsw", "title": "Most students are invisible on LinkedIn\u2014and they don\u2019t even know it. You are not your profile. \u27a1 Problem: Students are active but ineffective. \u27a1\u2026", "img": "https://media.licdn.com/dms/image/v2/D5622AQGYm9GqspgyqA/feedshare-shrink_2048_1536/B56ZegQ_hGG0Ao-/0/1750740500683?e=2147483647&v=beta&t=hxbGJhPDTWQu5lZcTWGSvbmBR1YgUQ5vdT13De87ntc", "id": "7343137891977437184"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_software-engineer-bangalore-karnataka-activity-7342919354042261506-iPgU", "title": "Visa is hiring! Position: Software Engineer in Test Salary: 12 - 24 LPA (Expected) Experience: Freshers/ Experienced Location: Bengaluru\u2026", "img": "https://media.licdn.com/dms/image/sync/v2/D5627AQH297v3ITEgkA/articleshare-shrink_1280_800/B56ZeWH6ZaHQAQ-/0/1750570346502?e=2147483647&v=beta&t=abP9qHpJUgDBYjmRF8WFamxC_PATikeE4SplP7PzwjI", "id": "7342919354042261506"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_hiring-intern-activity-7342925536249135104-HuXq", "title": "We\u2019re building the future of work at Heizen, and we\u2019re looking for sharp, driven individuals to join our early team. This is your chance to own\u2026", "img": "https://media.licdn.com/dms/image/v2/D5622AQH-ih90VmC5YQ/feedshare-shrink_1280/B56ZedP3IAGoAk-/0/1750689871948?e=2147483647&v=beta&t=kvH0H-bNsAQCXDcFV4JiOirGWcI4hgu6xuqqNmyeAyk", "id": "7342925536249135104"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_careers-at-genpact-activity-7342550990723698688-1xxf", "title": "\ud83d\udcccGenpact is hiring For Technical Associate Role Experience: 0 - 2 year's Apply here: https://lnkd.in/g6ZcftZk \ud83d\udcccHoneywell is hiring For Software\u2026", "img": "https://static.licdn.com/aero-v1/sc/h/53n89ecoxpr1qrki1do3alazb", "id": "7342550990723698688"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_hiring-resume-linkedin-activity-7342409601180422145-fXna", "title": "LinkedIn is your new resume. And if you\u2019re not posting, you don\u2019t exist. \u201cIt feels cringe.\u201d \u201cNo one\u2019s reading.\u201d \u201cI don\u2019t have anything to say.\u201d I\u2026", "img": "https://media.licdn.com/dms/image/v2/D5622AQE3oGCZcFpZIA/feedshare-shrink_2048_1536/B56ZeV6ncSG0Ao-/0/1750566863265?e=2147483647&v=beta&t=mnhO2esSwpSBh0RHxaaaZ3z8zq-hlYyclJIFoz5-z18", "id": "7342409601180422145"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_hiring-intern-software-activity-7341687870123876352-rq4V", "title": "15+ Fresher Roles- 2024/2025/2026 batch: {Repost & Save the List} Comscore, Inc. - Systems Engineer | 2025 batch \ud83d\udcccApply: https://lnkd.in/eBkbFE7A\u2026", "img": "https://media.licdn.com/dms/image/v2/D4E22AQGvrfAB2yF6Qw/feedshare-shrink_800/B4EZeLqNagHIAk-/0/1750394788983?e=2147483647&v=beta&t=6srtvb7qgXped5RwZ902pbk4MdcAHICdqEHVG9vewzc", "id": "7341687870123876352"}, {"interaction": "Liked by Jai Soni", "link": "https://www.linkedin.com/posts/jyoti-bhasin-7840991ba_these-5-myths-are-the-reason-most-freshers-activity-7341326014595141633-lSZn", "title": "These 5 myths are the reason most freshers don\u2019t get hired. You probably believe at least 2 of them. After helping a lot of students land real\u2026", "img": "https://media.licdn.com/dms/image/v2/D5622AQHUhx6HcNiCvQ/feedshare-shrink_2048_1536/B56ZeGhGiDGoAo-/0/1750308515629?e=2147483647&v=beta&t=2byzk345Lj1ViiRhr93W3OKt0Hz2_G1kh_ELfXrbdXc", "id": "5"}], "linkedin_num_id": "1061898717", "banner_image": "https://static.licdn.com/aero-v1/sc/h/5q92mjc5c51bjlwaj3rs9aa82", "honors_and_awards": null, "similar_profiles": [], "default_avatar": false, "memorialized_account": false, "bio_links": [{"title": "Portfolio", "link": "https://jais-portfolio.netlify.app/"}], "first_name": "Jai", "last_name": "Soni", "timestamp": "2025-08-03T05:44:15.242Z", "input": {"url": "https://www.linkedin.com/in/jai-soni-879764257/"}}
+</file>
+
+<file path="tools/jd_scraper.py">
+import time
+import requests
+from bs4 import BeautifulSoup
+from bs4.element import NavigableString
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import TimeoutException
+# Import ChromeOptions to set headless mode
+from selenium.webdriver.chrome.options import Options
+
+class Scraper:
+    def __init__(self) -> None:
+        pass
+
+    def scrape(self, url: str) -> str | None:
+        """
+        Attempts to scrape using the fast method first, then falls back to Selenium.
+        """
+        print("--- Attempting fast scrape with 'requests' ---")
+        scrape_result = self._scrape_with_request(url)
+        
+        if not scrape_result or not scrape_result.strip():
+            print("\n--- 'requests' failed or returned empty. Falling back to Headless Selenium ---")
+            scrape_result = self._scrape_with_selenium(url)
+            
+        return scrape_result
+    
+    def _scrape_with_request(self, url : str) -> str | None:
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            res = requests.get(url=url, headers=headers, timeout=10)
+            res.raise_for_status()
+            return Scraper._soup_and_extract(res.text)
+        except Exception as e:
+            print(f"Error while scraping with requests: {e}")
+            return None
+          
+    def _scrape_with_selenium(self, url : str) -> str | None:
+        """
+        Uses headless Selenium with a generic waiting strategy.
+        """
+        # Configure headless options ---
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new") # Runs Chrome without a UI
+        chrome_options.add_argument("--window-size=1920,1080") # Optional: Specify window size
+
+        # Initialize the driver with the new options
+        driver = webdriver.Chrome(options=chrome_options)
+
+        html_content = None
+        try:
+            driver.get(url)
+            print("Waiting for page to load in headless mode...")
+            WebDriverWait(driver, 20).until(
+                lambda d: d.execute_script("return document.readyState") == 'complete'
+            )
+            time.sleep(2)
+            
+            print("Content loaded successfully.")
+            html_content = driver.page_source
+
+        except TimeoutException:
+            print("Timed out waiting for page to load.")
+            html_content = driver.page_source
+        except Exception as e:
+            print(f"An error occurred during Selenium scraping: {e}")
+        finally:
+            driver.quit()
+        
+        if html_content:
+            return Scraper._soup_and_extract(html_content)
+        return None
+
+    @staticmethod
+    def _soup_and_extract(html_content: str | None) -> str | None:
+        if not html_content:
+            return None
+            
+        soup = BeautifulSoup(html_content, 'html.parser')
+        body_tag = soup.find('body')
+
+        if body_tag:
+            full_text = Scraper.extract_text_recursively(body_tag)
+            final_text = ' '.join(full_text.split())
+            return final_text
+        
+        print("Warning: No <body> tag found in the HTML content.")
+        return None
+
+    @staticmethod
+    def extract_text_recursively(element):
+        if isinstance(element, NavigableString):
+            text = element.strip()
+            return text + ' ' if text else ''
+        if element.name in ['script', 'style', 'header', 'footer', 'nav']:
+            return ''
+        text_content = ''
+        for child in element.children:
+            text_content += Scraper.extract_text_recursively(child)
+        return text_content
+
+
+if __name__ == '__main__':
+    url = "https://www.linkedin.com/jobs/view/4278200847/?alternateChannel=search&eBP=CwEAAAGYgq8JD6GsDDh7vXI3HzbNam1QyF-JEI-4ECD26N8pGD13VEzd1lz1gAZrzQZxdWs9NSDOIM6RFD1GkpPK47m9biT-pHFUbvX78EsL3-E3XMzSI81b7sKvn8bZ0-lVtNYQm4O_kacLZcK61gCynLvYxfiBDeJbQr0UoGucL_bTNFe0gfj4WPJmx5GyMJmTfyHmBqggexEHDENTUgHvbeqF7nFJFH6nosheFSyesDYdHmf2OyOQUt9UnlV3oayCqCeWAN_qewQvgh3yIKLpgbalRI8yYghURu_07SZ8j2ddcAOjUFlvIfyILFErC-0rvwAXRId54WkVFnGg17dGJprmoQyvzFkIYsEKM36QKT_SBZBgK1xAQKd3ew0NUTLxqNBpltz4zaTL1MRHWfnZuAe1EnY9tDACUpfNZttIz_5CZ1PPlxDBBI8x45T7crPGG7AHaxhflTiW5dLSrY4UnQQENohy3SshXW1iWw&refId=FJ1FlVuOiHi5vc1YAXoyjQ%3D%3D&trackingId=OrgjObJiq9sYZTLich8Ogw%3D%3D&lipi=urn%3Ali%3Apage%3Ad_flagship3_jobs_discovery_jymbii%3By%2FeEXZjZR%2BWZKtcQ%2Bnia4w%3D%3D"
+    scraper = Scraper()
+    data = scraper.scrape(url)
+    print("\n--- FINAL SCRAPED DATA ---")
+    print(data)
+</file>
+
+<file path="tools/jd_to_json.py">
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from dotenv import load_dotenv
+import os
+
+
+from pydantic import BaseModel, Field
+from typing import Literal
+
+class JobListing(BaseModel):
+    title: str = Field(..., description="The title of the job position.")
+    level: Literal["Entry", "Mid", "Senior"] = Field(..., description="Seniority level of the job.")
+    location: str = Field(..., description="The job's location.")
+    description: str = Field(..., description="Overview of the role and company.")
+    key_qualifications: str = Field(..., description="Required skills and experience.")
+    preferred_qualifications: str = Field(..., description="Optional but desired qualifications.")
+    responsibilities: str = Field(..., description="Primary duties and responsibilities.")
+    company: str = Field(..., description="Name of the hiring company.")
+
+SYSTEM_MESSAGE = """
+You are an expert job description parser.
+
+You will be provided with a raw job description as input. Your task is to extract key structured information and convert it into a strict JSON format following the specified schema.
+
+Here is what each field means:
+- title: The full title of the position (e.g., "Software Engineer", "Generative AI Specialist").
+- level: The seniority level. Choose only one of: "Entry", "Mid", or "Senior". Guess based on years of experience and responsibility level.
+- location: The primary location of the job (city, state, country).
+- description: A high-level summary about the job and company.
+- key_qualifications: All required experience, skills, and educational background.
+- preferred_qualifications: Optional but preferred experience or skills.
+- responsibilities: Key responsibilities or duties expected in this role.
+- company: The name of the company hiring for this role.
+
+Make sure:
+- The JSON is strictly valid and fully conforms to the schema.
+- All fields are filled accurately based on available content.
+- If a field is not present in the job description, infer it intelligently or leave it empty.
+- Do not include any extra commentary — just the JSON.
+
+Respond only with the JSON object.
+"""
+""
+
+class JD2JSON():
+    def __init__(self, system_msg_str: str = SYSTEM_MESSAGE) -> None:
+        load_dotenv()
+        self.__llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash', google_api_key=os.getenv('GOOGLE_API_KEY'))
+        self._system_message_str = system_msg_str
+        self.__parser = JsonOutputParser(pydantic_object=JobListing)
+        self.__prompt_template: ChatPromptTemplate | None = None
+        self.__chain = None
+
+    def _create_prompt(self, system_message: str, human_message: str) -> ChatPromptTemplate:
+        safe_format_instructions = self.__parser.get_format_instructions().replace("{", "{{").replace("}", "}}")
+        
+        return ChatPromptTemplate.from_messages(
+            [
+                ("system", system_message + "\n\n" + safe_format_instructions),
+                ("human", human_message)
+            ]
+        )
+
+
+    def __generate_chain(self, llm: ChatGoogleGenerativeAI, prompt: ChatPromptTemplate):
+        return prompt | llm | self.__parser
+
+    def convert(self, jd: str) -> JobListing:
+        self.__prompt_template = self._create_prompt(self._system_message_str, jd)
+        self.__chain = self.__generate_chain(self.__llm, self.__prompt_template)
+        return self.__chain.invoke({})
+    
+if __name__ == '__main__':
+    jd_2_json = JD2JSON(SYSTEM_MESSAGE)
+    data = """
+Skip to main content Generative AI Engineer Aiqwip Bengaluru, Karnataka, India Apply Generative AI Engineer Aiqwip Bengaluru, Karnataka, India 1 day ago Over 200 applicants See who Aiqwip has hired for this role Apply Save Report this job Job Title: Generative AI Engineer Relevant Experience: 1-3 years Location: Bangalore Job Type: Full-Time on site (5 Days Work From Office) Company Overview At Aiqwip, we are building full-stack applications powered by Agentic AI, multimodal agent frameworks, and real-world business logic. We take pride in building highly modular, elegant frontend systems that work seamlessly with intelligent backends to deliver world-class user experiences. Our focus is on exceptional software design, scalable architectures, and robust AI integrations that turn product visions into reality. With deep experience in analytics, data science, and frontend engineering, our team delivers cutting-edge experiences across enterprise and consumer interfaces. We’re looking for a generative AI engineer with a builder's mindset, ready to prototype quickly, iterate fast, and deliver results in a fast-paced startup environment. Responsibilities Develop, deploy, and maintain end-to-end Generative AI applications. Architect and implement intelligent agents using agentic frameworks. Build, debug, and maintain complex systems using industry best practices Fine-tune LLMs and optimize prompt engineering pipelines. Work closely with clients, internal teams and clients to gather requirements and deliver solutions Conduct code reviews, implement version control workflows, and contribute to DevOps pipelines. Continuously learn and contribute ideas to improve our tech and processes Stay up-to-date with emerging trends in Generative AI and apply them to solve practical problems. Experiment with cutting-edge Generative AI technologies. Must Have Skills Effective communication and collaboration skills Proficient in Python and its ecosystem for backend and AI development. Strong backend engineering using FastAPI or Django. Understanding of WebSocket communication and event-driven architectures. Experience working with LLMs and APIs from OpenAI (ChatGPT, GPT-4/4o), Azure OpenAI, Anthropic Claude, AWS Bedrock, and Groq. Familiarity with embedding models like OpenAI, Cohere Knowledge of LLM observability tools such as LangSmith. Experience with open-source LLMs like Mistral, LLaMA, Falcon, Mixtral, Yi, or Gemma. Strong grasp of Agentic AI architectures and hands-on experience with frameworks like LangChain, LangGraph, CrewAI Expertise in prompt engineering, including prompt chaining, template design (zero-shot, few-shot, chain-of-thought), and system prompts for multi-agent collaboration. Experience building RAG pipelines with vector databases such as Pinecone, Milvus, ChromaDB, FAISS Exposure to LLM fine-tuning, LoRA Proficiency in using Azure AI Services including Azure Document Intelligence and Azure OpenAI Studio. Working knowledge of Docker, Linux (Ubuntu), and remote development using SSH. Proficient with API documentation and testing tools such as Swagger/OpenAPI and Postman. Experience implementing real-world Generative AI use cases such as RAG-based agents, multi-agent Q&A systems, summarization, classification, document parsing, and semantic search. Strong debugging and problem-solving skills. Good to Have Skills Deep understanding of Azure cloud platform is a plus Ability to build simple frontend interfaces using React.js, HTML, CSS, Tailwind, or Next.js. Deployment experience using PM2, NGINX with Uvicorn or Gunicorn. Show more Show less Seniority level Entry level Employment type Full-time Job function Engineering and Information Technology Industries Software Development Referrals increase your chances of interviewing at Aiqwip by 2x See who you know Get notified when a new job is posted. Set alert Sign in to set job alerts for “Generative AI Engineer” roles. Sign in Welcome back "Show" "Show your LinkedIn password" "Hide" "Hide your LinkedIn password" "Please enter an email address or phone number" "Email or phone number must be between 3 to 128 characters" "Email or phone number must be between 3 to 128 characters" "Please enter a password" "The password you provided must have at least 6 characters" "The password you provided must have at most 400 characters" Email or phone Password Show Forgot password? Sign in or By clicking Continue to join or sign in, you agree to LinkedIn’s User Agreement , Privacy Policy , and Cookie Policy . New to LinkedIn? Join now or New to LinkedIn? Join now By clicking Continue to join or sign in, you agree to LinkedIn’s User Agreement , Privacy Policy , and Cookie Policy . "4278200847" "FJ1FlVuOiHi5vc1YAXoyjQ==" "https://www.linkedin.com/signup/cold-join?source=jobs_registration&session_redirect=https%3A%2F%2Fin.linkedin.com%2Fjobs%2Fview%2Fgenerative-ai-engineer-at-aiqwip-4278200847&trk=public_jobs_save-job" Similar jobs Software Engineer (Backend 3-5yrs) Software Engineer (Backend 3-5yrs) PhonePe Bengaluru, Karnataka, India 6 days ago Software Engineer Software Engineer Flipkart Bengaluru, Karnataka, India 6 days ago React JS Developer React JS Developer Infosys Bengaluru East, Karnataka, India 5 days ago Python Developer Python Developer Infosys Bengaluru East, Karnataka, India 5 days ago Node JS Developer Node JS Developer Infosys Bengaluru East, Karnataka, India 5 days ago React Front End Engineer React Front End Engineer Infosys Bengaluru East, Karnataka, India 5 days ago Software Developer Software Developer Oracle Bengaluru, Karnataka, India 1 day ago Easebuzz - Full Stack Developer - Python/React.js Easebuzz - Full Stack Developer - Python/React.js Easebuzz Bengaluru East, Karnataka, India 1 week ago Java Developer Java Developer Infosys Bengaluru East, Karnataka, India 5 days ago Software Engineer III, Full Stack, Google One Software Engineer III, Full Stack, Google One Google Bengaluru, Karnataka, India 4 days ago Java Developer Java Developer Infosys Bengaluru East, Karnataka, India 5 days ago Java Developer Java Developer Infosys Bengaluru East, Karnataka, India 5 days ago Python developer Python developer Infosys Bengaluru East, Karnataka, India 5 days ago Full Stack Engineer - Java & ReactJS Full Stack Engineer - Java & ReactJS Infosys Bengaluru East, Karnataka, India 5 days ago Python Developer Python Developer Infosys Bengaluru East, Karnataka, India 5 days ago Software Engineer (5-8yrs) Software Engineer (5-8yrs) PhonePe Bengaluru, Karnataka, India 1 week ago Java FullStack Developer (React JS) Java FullStack Developer (React JS) Infosys Bengaluru East, Karnataka, India 5 days ago Python Developer_Associate/Director_Software Engineering Python Developer_Associate/Director_Software Engineering Morgan Stanley Bengaluru, Karnataka, India 6 days ago Python Developer Python Developer Infosys Bengaluru East, Karnataka, India 5 days ago Java Developer Java Developer Persistent Systems Bengaluru, Karnataka, India 4 days ago Software Engineer III, Google Cloud Software Engineer III, Google Cloud Google Bengaluru, Karnataka, India 2 days ago Software Development Engineer- I Software Development Engineer- I Amazon Bengaluru, Karnataka, India 5 days ago Node Js Developer Node Js Developer Infosys Bengaluru East, Karnataka, India 5 days ago Java Developer Java Developer Infosys Bengaluru East, Karnataka, India 3 days ago Junior Java Springboot Developer Junior Java Springboot Developer Infosys Bengaluru East, Karnataka, India 5 days ago Software Engineer 2, Backend Software Engineer 2, Backend Intuit Bengaluru, Karnataka, India 1 day ago Software Development Engineer III Software Development Engineer III Flipkart Bengaluru, Karnataka, India 6 days ago Show more jobs like this Show fewer jobs like this People also viewed Frontend developer Intern Frontend developer Intern Flam Bengaluru, Karnataka, India 1 day ago React JS Consultant React JS Consultant Infosys Bengaluru East, Karnataka, India 5 days ago Software Engineer III, Full Stack, Google Cloud Software Engineer III, Full Stack, Google Cloud Google Bengaluru, Karnataka, India 1 day ago Software Engineer 2 Software Engineer 2 Intuit Bengaluru, Karnataka, India 1 week ago Software Developer Software Developer IBM Bengaluru, Karnataka, India 5 days ago PLSQL PLSQL Infosys Bengaluru East, Karnataka, India 5 days ago Node JS + React JS Developer Node JS + React JS Developer Infosys Bengaluru East, Karnataka, India 5 days ago Java Fullstack developer Java Fullstack developer Infosys Bengaluru East, Karnataka, India 5 days ago Java Developer Java Developer Infosys Bengaluru East, Karnataka, India 5 days ago React JS Consultant React JS Consultant Infosys Bengaluru East, Karnataka, India 5 days ago Explore collaborative articles We’re unlocking community knowledge in a new way. Experts add insights directly into each article, started with the help of AI. Explore More LinkedIn Know when new jobs open up Never miss a job alert with the new LinkedIn app for Windows. Get the app Agree & Join LinkedIn By clicking Continue to join or sign in, you agree to LinkedIn’s User Agreement , Privacy Policy , and Cookie Policy . false false false "control" true "en_US" Sign in to see who you already know at Aiqwip Sign in Welcome back "Show" "Show your LinkedIn password" "Hide" "Hide your LinkedIn password" "Please enter an email address or phone number" "Email or phone number must be between 3 to 128 characters" "Email or phone number must be between 3 to 128 characters" "Please enter a password" "The password you provided must have at least 6 characters" "The password you provided must have at most 400 characters" Email or phone Password Show Forgot password? Sign in or By clicking Continue to join or sign in, you agree to LinkedIn’s User Agreement , Privacy Policy , and Cookie Policy . New to LinkedIn? Join now or New to LinkedIn? Join now By clicking Continue to join or sign in, you agree to LinkedIn’s User Agreement , Privacy Policy , and Cookie Policy . LinkedIn LinkedIn is better on the app Don’t have the app? Get it in the Microsoft Store. Open the app false "in" "d_jobs_guest_details"
+"""
+    result = jd_2_json.convert(data)
+    print(result)
+</file>
+
+<file path="tools/linkedin_scraper.py">
+from selenium import webdriver
+from linkedin_scraper import Person, actions
+
+class LinkedInScraper:
+    def __init__(self, username, password):
+        self.username = username
+        self.password = password
+        self.driver = webdriver.Chrome()  # keep driver alive for session
+
+    def scrape_profile(self, profile_url):
+        try:
+            actions.login(self.driver, email=self.username, password=self.password)
+            person = Person(profile_url, driver=self.driver)
+            return {
+                'name': person.name,
+                'job_title': person.job_title,
+                'company': person.company,
+                'location': person.location,
+                'about': person.about,
+                'experiences': person.experiences,
+                'education': person.educations,
+                'interests': person.interests,
+            }
+        except Exception as e:
+            print(f"An error occurred while scraping the profile: {e}")
+            return {}
+
+    def close(self):
+        self.driver.quit()
+
+
+if __name__ == "__main__":
+    from linkedin_scraper import Person, actions
+    from selenium import webdriver
+    driver = webdriver.Chrome()
+
+    email = "developer.jaisoni@gmail.com"
+    password =  "J@iu2003"
+    actions.login(driver, email, password) # if email and password isnt given, it'll prompt in terminal
+    person = Person("https://www.linkedin.com/in/jai-soni-879764257/", driver=driver)
+    print(person)
+</file>
+
+<file path="tools/linkedin.py">
+from langchain_brightdata import BrightDataWebScraperAPI
+from dotenv import load_dotenv
+import os
+from typing import Dict
+import json
+
+load_dotenv()
+
+class LinkedIn:
+    def __init__(self):
+        self.wrapper: BrightDataWebScraperAPI | None = self.__get_wrapper()
+        
+    
+    def __get_wrapper(self) -> BrightDataWebScraperAPI | None:
+        key = os.getenv('BRIGHT_DATA_API_KEY')
+        if not key:
+            return None
+        from pydantic import SecretStr
+        return BrightDataWebScraperAPI(bright_data_api_key=SecretStr(key))
+        
+    def search(self, profile_link : str):
+        """Fetch the details of the linkedIN profile and extract important information for LLM"""
+        # with open('C:\\Machine Learning\\my-email-generator\\app\\result.json', 'r') as f:
+        #     linkedin_results = json.loads(f.read())
+        # f.close()
+        # summary = self._compile_summary(linkedin_results)
+        # return summary
+        if not self.wrapper or not profile_link:
+            print(f"Cant Search , Wrapper {self.wrapper}, profile_url : {profile_link}")
+            return
+        args = {
+            "url": profile_link,
+            "dataset_type": "linkedin_person_profile",
+        }
+        try:
+            linkedin_results = self.wrapper.invoke(args)
+            # with open('result.json' , 'w') as f:
+            #     f.write(json.dumps(linkedin_results))
+            # f.close()
+            summary = self._compile_summary(linkedin_results)
+            return summary
+        except Exception as e:
+            print(f'Error Occuered while searching for linkedIN profile : {e}')
+            return {}
+    
+    def _compile_summary(self, summary: Dict):
+        if not summary:
+            return None
+
+        experiences = summary.get('experience', [])
+        current_experience = experiences[0] if experiences else {}
+
+        final_summary = {
+            "name": summary.get('name'),
+            "profile_heading": summary.get('position'),
+            "location": summary.get('location'),
+            "about": summary.get('about'),
+            "current_company": current_experience.get('company_name'),
+            "current_role": current_experience.get('position'),
+            # Adding enhanced fields
+            "education": summary.get('education', []), # List of educational institutions
+            "recent_activity": summary.get('posts', [])[:2], # Get the 2 most recent posts
+            "past_companies": [exp.get('company_name') for exp in experiences[1:]] # List of previous companies
+        }
+        
+        return {k: v for k, v in final_summary.items() if v}
+          
+if __name__ == "__main__":
+    url =  "https://www.linkedin.com/in/jai-soni-879764257/"
+    serach_tool = LinkedIn()
+    linked_res = None
+    with open('result.json', 'r') as f:
+        linked_res = json.loads(f.read())
+    f.close()
+    res = serach_tool._compile_summary(linked_res)
+    print(res)
+</file>
+
+<file path="tools/resume_parser.py">
+from langchain_community.document_loaders import PyPDFLoader
+
+class ResumeParser:
+    def __init__(self):
+        pass
+    
+    def parse(self, path: str)->str | None:
+        if not path:
+            print("No Path specifided cannot parse")
+            return None
+        loader = PyPDFLoader(path)
+        pages = loader.load()
+        resume_content = ""
+        for page in pages:
+            resume_content += page.page_content
+        return resume_content
+</file>
+
+</files>
