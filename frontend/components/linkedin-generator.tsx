@@ -4,20 +4,19 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react"
+import { ArrowLeft, CheckCircle, Loader2, MessageCircle } from "lucide-react"
 import { ResumeUpload } from "@/components/steps/resume-upload"
 import { JobDescriptionInput } from "@/components/steps/job-description-input"
 import { RecruiterInput } from "@/components/steps/recruiter-input"
-import { EmailResult } from "@/components/steps/email-result"
+import { LinkedInResult } from "@/components/steps/linkedin-result"
 import { parseResume } from "@/api/resume"
 import { jdToJSON } from "@/api/jd"
-import { generateEmail } from "@/api/email"
 
-interface EmailGeneratorProps {
+interface LinkedInGeneratorProps {
   onBack: () => void
 }
 
-export function EmailGenerator({ onBack }: EmailGeneratorProps) {
+export function LinkedInGenerator({ onBack }: LinkedInGeneratorProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState("")
@@ -26,21 +25,21 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     resume: null as File | null,
     jobDescription: "",
     recruiterInfo: "",
-    generatedEmail: "",
+    generatedMessage: "",
   })
 
   const [finalData, setFinalData] = useState({
     resumeText: "",
     jobDescription: "",
     recruiterInfo: "",
-    generatedEmail: "",
+    generatedMessage: "",
   })
 
   const steps = [
     { id: 1, title: "Upload Resume", completed: !!formData.resume },
     { id: 2, title: "Job Description", completed: !!formData.jobDescription },
     { id: 3, title: "Recruiter Info", completed: !!formData.recruiterInfo },
-    { id: 4, title: "Generated Email", completed: !!formData.generatedEmail },
+    { id: 4, title: "LinkedIn Message", completed: !!formData.generatedMessage },
   ]
 
   const progress = ((currentStep - 1) / (steps.length - 1)) * 100
@@ -54,7 +53,6 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     try {
       const resume = await parseResume(formData.resume)
       if (resume) {
-        console.log("Parsed Resume Text: ", resume)
         setFinalData((prev) => ({ ...prev, resumeText: resume }))
         return true
       }
@@ -75,7 +73,6 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     try {
       const jd = await jdToJSON(formData.jobDescription)
       if (jd && Object.keys(jd).length > 0) {
-        console.log("Parsed Job Description: ", jd)
         setFinalData((prev) => ({ ...prev, jobDescription: JSON.stringify(jd, null, 2) }))
         return true
       }
@@ -87,20 +84,27 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     }
   }
 
-  const handleEmailApi = async (): Promise<boolean> => {
-    if (!finalData.resumeText || !finalData.jobDescription || !finalData.recruiterInfo) return false
+  const handleMessageApi = async (): Promise<boolean> => {
+    if (!finalData.resumeText || !finalData.jobDescription) return false
 
     setIsLoading(true)
-    setLoadingMessage("Generating your personalized email...")
+    setLoadingMessage("Generating your LinkedIn message...")
 
     try {
-      const email = await generateEmail(finalData.resumeText, finalData.jobDescription, finalData.recruiterInfo)
-      if (email) {
-        setFormData((prev) => ({ ...prev, generatedEmail: email }))
-        return true
-      }
-      alert("Failed to generate email. Please try again.")
-      return false
+      // For now, generate a demo message - replace with actual API call
+      const message = `Hi [Name],
+
+I hope this message finds you well. I came across the [Job Title] position at [Company] and was immediately drawn to the opportunity.
+
+With my background in [relevant skills from resume], I believe I could bring significant value to your team. I'm particularly excited about [specific aspect of the job/company].
+
+Would you be open to a brief conversation about this role? I'd love to learn more about the team's current priorities and how I might contribute.
+
+Best regards,
+[Your Name]`
+
+      setFormData((prev) => ({ ...prev, generatedMessage: message }))
+      return true
     } finally {
       setIsLoading(false)
       setLoadingMessage("")
@@ -116,7 +120,7 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     }
     if (step == 3) {
       setFinalData((prev) => ({ ...prev, recruiterInfo: formData.recruiterInfo }))
-      return handleEmailApi()
+      return handleMessageApi()
     }
     return true
   }
@@ -147,11 +151,13 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
           </Button>
 
           <div className="text-center mb-8">
-            <h1 className="font-serif text-3xl font-bold mb-2">Create Your Perfect Email</h1>
-            <p className="text-muted-foreground">Follow these simple steps to generate a personalized outreach email</p>
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <MessageCircle className="h-8 w-8 text-blue-600" />
+              <h1 className="font-serif text-3xl font-bold">Create LinkedIn Message</h1>
+            </div>
+            <p className="text-muted-foreground">Generate a personalized LinkedIn message for direct outreach</p>
           </div>
 
-          {/* Progress Bar */}
           <div className="mb-8">
             <Progress value={progress} className="mb-4" />
             <div className="flex justify-between">
@@ -160,9 +166,9 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
                   <div
                     className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
                       step.completed
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-blue-600 text-white"
                         : currentStep === step.id
-                          ? "bg-primary/20 text-primary"
+                          ? "bg-blue-100 text-blue-600"
                           : "bg-muted text-muted-foreground"
                     }`}
                   >
@@ -179,7 +185,7 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
           <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
             <Card className="w-96">
               <CardContent className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
                 <p className="text-lg font-medium mb-2">Processing...</p>
                 <p className="text-sm text-muted-foreground text-center">{loadingMessage}</p>
               </CardContent>
@@ -218,9 +224,9 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
               />
             )}
             {currentStep === 4 && (
-              <EmailResult
+              <LinkedInResult
                 formData={finalData}
-                onEmailGenerated={(email) => setFinalData((prev) => ({ ...prev, generatedEmail: email }))}
+                onMessageGenerated={(message) => setFinalData((prev) => ({ ...prev, generatedMessage: message }))}
                 onPrevious={handlePrevious}
                 onStartOver={() => {
                   setCurrentStep(1)
@@ -228,13 +234,13 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
                     resume: null,
                     jobDescription: "",
                     recruiterInfo: "",
-                    generatedEmail: "",
+                    generatedMessage: "",
                   })
                   setFinalData({
                     resumeText: "",
                     jobDescription: "",
                     recruiterInfo: "",
-                    generatedEmail: "",
+                    generatedMessage: "",
                   })
                 }}
               />

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Import all your routers
 from app.api import health
 from app.api.v1 import job_description, linkedin, resume, email
+from app.api.v2 import email as email_v2
 
 def create_app():
     app = FastAPI(title="Dynamic Email Generator API")
@@ -29,6 +30,7 @@ def create_app():
     app.include_router(job_description.router, prefix="/api/v1")
     app.include_router(linkedin.router, prefix="/api/v1")
     app.include_router(resume.router, prefix="/api/v1")
+    app.include_router(email_v2.router, prefix="/api/v2")
     
     logger.info("Application setup complete. All routers included.")
     return app

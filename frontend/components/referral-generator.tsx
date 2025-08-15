@@ -4,20 +4,19 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react"
+import { ArrowLeft, CheckCircle, Loader2, Users } from "lucide-react"
 import { ResumeUpload } from "@/components/steps/resume-upload"
 import { JobDescriptionInput } from "@/components/steps/job-description-input"
-import { RecruiterInput } from "@/components/steps/recruiter-input"
-import { EmailResult } from "@/components/steps/email-result"
+import { ReferralContactInput } from "@/components/steps/referral-contact-input"
+import { ReferralResult } from "@/components/steps/referral-result"
 import { parseResume } from "@/api/resume"
 import { jdToJSON } from "@/api/jd"
-import { generateEmail } from "@/api/email"
 
-interface EmailGeneratorProps {
+interface ReferralGeneratorProps {
   onBack: () => void
 }
 
-export function EmailGenerator({ onBack }: EmailGeneratorProps) {
+export function ReferralGenerator({ onBack }: ReferralGeneratorProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState("")
@@ -25,22 +24,22 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
   const [formData, setFormData] = useState({
     resume: null as File | null,
     jobDescription: "",
-    recruiterInfo: "",
-    generatedEmail: "",
+    contactInfo: "",
+    generatedMessage: "",
   })
 
   const [finalData, setFinalData] = useState({
     resumeText: "",
     jobDescription: "",
-    recruiterInfo: "",
-    generatedEmail: "",
+    contactInfo: "",
+    generatedMessage: "",
   })
 
   const steps = [
     { id: 1, title: "Upload Resume", completed: !!formData.resume },
     { id: 2, title: "Job Description", completed: !!formData.jobDescription },
-    { id: 3, title: "Recruiter Info", completed: !!formData.recruiterInfo },
-    { id: 4, title: "Generated Email", completed: !!formData.generatedEmail },
+    { id: 3, title: "Contact Info", completed: !!formData.contactInfo },
+    { id: 4, title: "Referral Request", completed: !!formData.generatedMessage },
   ]
 
   const progress = ((currentStep - 1) / (steps.length - 1)) * 100
@@ -54,7 +53,6 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     try {
       const resume = await parseResume(formData.resume)
       if (resume) {
-        console.log("Parsed Resume Text: ", resume)
         setFinalData((prev) => ({ ...prev, resumeText: resume }))
         return true
       }
@@ -75,7 +73,6 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     try {
       const jd = await jdToJSON(formData.jobDescription)
       if (jd && Object.keys(jd).length > 0) {
-        console.log("Parsed Job Description: ", jd)
         setFinalData((prev) => ({ ...prev, jobDescription: JSON.stringify(jd, null, 2) }))
         return true
       }
@@ -87,20 +84,29 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     }
   }
 
-  const handleEmailApi = async (): Promise<boolean> => {
-    if (!finalData.resumeText || !finalData.jobDescription || !finalData.recruiterInfo) return false
+  const handleReferralApi = async (): Promise<boolean> => {
+    if (!finalData.resumeText || !finalData.jobDescription) return false
 
     setIsLoading(true)
-    setLoadingMessage("Generating your personalized email...")
+    setLoadingMessage("Generating your referral request...")
 
     try {
-      const email = await generateEmail(finalData.resumeText, finalData.jobDescription, finalData.recruiterInfo)
-      if (email) {
-        setFormData((prev) => ({ ...prev, generatedEmail: email }))
-        return true
-      }
-      alert("Failed to generate email. Please try again.")
-      return false
+      // For now, generate a demo message - replace with actual API call
+      const message = `Hi [Contact Name],
+
+I hope you're doing well! I wanted to reach out because I saw that [Company] is hiring for a [Job Title] position, and I know you have connections there.
+
+I'm really excited about this opportunity because [specific reason related to the role/company]. Given my background in [relevant experience from resume], I believe I'd be a great fit for the team.
+
+Would you be comfortable providing a referral or introduction? I'd be happy to send you my resume and any other information that would be helpful.
+
+I really appreciate you taking the time to consider this, and I understand if you're not able to help.
+
+Thanks so much!
+[Your Name]`
+
+      setFormData((prev) => ({ ...prev, generatedMessage: message }))
+      return true
     } finally {
       setIsLoading(false)
       setLoadingMessage("")
@@ -115,8 +121,8 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
       return handleJobDescriptionApi()
     }
     if (step == 3) {
-      setFinalData((prev) => ({ ...prev, recruiterInfo: formData.recruiterInfo }))
-      return handleEmailApi()
+      setFinalData((prev) => ({ ...prev, contactInfo: formData.contactInfo }))
+      return handleReferralApi()
     }
     return true
   }
@@ -147,11 +153,13 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
           </Button>
 
           <div className="text-center mb-8">
-            <h1 className="font-serif text-3xl font-bold mb-2">Create Your Perfect Email</h1>
-            <p className="text-muted-foreground">Follow these simple steps to generate a personalized outreach email</p>
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <Users className="h-8 w-8 text-purple-600" />
+              <h1 className="font-serif text-3xl font-bold">Request a Referral</h1>
+            </div>
+            <p className="text-muted-foreground">Generate a personalized referral request for your network</p>
           </div>
 
-          {/* Progress Bar */}
           <div className="mb-8">
             <Progress value={progress} className="mb-4" />
             <div className="flex justify-between">
@@ -160,9 +168,9 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
                   <div
                     className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
                       step.completed
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-purple-600 text-white"
                         : currentStep === step.id
-                          ? "bg-primary/20 text-primary"
+                          ? "bg-purple-100 text-purple-600"
                           : "bg-muted text-muted-foreground"
                     }`}
                   >
@@ -179,7 +187,7 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
           <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
             <Card className="w-96">
               <CardContent className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                <Loader2 className="h-8 w-8 animate-spin text-purple-600 mb-4" />
                 <p className="text-lg font-medium mb-2">Processing...</p>
                 <p className="text-sm text-muted-foreground text-center">{loadingMessage}</p>
               </CardContent>
@@ -210,31 +218,31 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
               />
             )}
             {currentStep === 3 && (
-              <RecruiterInput
-                value={formData.recruiterInfo}
-                onChange={(value) => updateFormData({ recruiterInfo: value })}
+              <ReferralContactInput
+                value={formData.contactInfo}
+                onChange={(value) => updateFormData({ contactInfo: value })}
                 onNext={handleNext}
                 onPrevious={handlePrevious}
               />
             )}
             {currentStep === 4 && (
-              <EmailResult
+              <ReferralResult
                 formData={finalData}
-                onEmailGenerated={(email) => setFinalData((prev) => ({ ...prev, generatedEmail: email }))}
+                onMessageGenerated={(message) => setFinalData((prev) => ({ ...prev, generatedMessage: message }))}
                 onPrevious={handlePrevious}
                 onStartOver={() => {
                   setCurrentStep(1)
                   setFormData({
                     resume: null,
                     jobDescription: "",
-                    recruiterInfo: "",
-                    generatedEmail: "",
+                    contactInfo: "",
+                    generatedMessage: "",
                   })
                   setFinalData({
                     resumeText: "",
                     jobDescription: "",
-                    recruiterInfo: "",
-                    generatedEmail: "",
+                    contactInfo: "",
+                    generatedMessage: "",
                   })
                 }}
               />

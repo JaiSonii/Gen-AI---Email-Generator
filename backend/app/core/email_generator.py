@@ -38,6 +38,46 @@ class EmailGenerator:
         resume_text = self.resume_parser.parse(resume_path)
         result_holder['resume_text'] = resume_text if resume_text else ""
 
+    def craft_email(
+        self,
+        resume_text: str,
+        job_description: str,
+        recruiter_info: Optional[str] = None
+    ) ->str:
+        system_prompt = (
+            "You are an expert career assistant. Given the provided context, "
+            "curate a professional and concise email to the recruiter. "
+            "Highlight the candidate's relevant experience from their resume "
+            "and express genuine interest in the role."
+        )
+        
+        human_prompt_parts = [
+            "Job Description JSON:\n{jd_json}",
+            "Resume:\n{resume_text}"
+        ]
+        
+        input_data = {
+            "jd_json": job_description,
+            "resume_text": resume_text
+        }
+
+        if recruiter_info:
+            human_prompt_parts.insert(1, "Recruiter Info:\n{recruiter_info}")
+            input_data["recruiter_info"] = recruiter_info
+        
+        human_prompt = "\n\n".join(human_prompt_parts) + "\n\nGenerate the email below:"
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", human_prompt)
+        ])
+        
+        chain = prompt | self.llm
+        
+        result = chain.invoke(input_data)
+        
+        return result.content if hasattr(result, "content") else str(result)
+
     def generate(
         self,
         resume_path: str,
@@ -73,40 +113,11 @@ class EmailGenerator:
         recruiter_info = results.get('recruiter_info', {})
         resume_text = results.get('resume_text', "")
 
-        # Dynamically build the prompt
-        system_prompt = (
-            "You are an expert career assistant. Given the provided context, "
-            "curate a professional and concise email to the recruiter. "
-            "Highlight the candidate's relevant experience from their resume "
-            "and express genuine interest in the role."
+        return self.craft_email(
+            resume_text=resume_text,
+            job_description=jd_json,
+            recruiter_info=recruiter_info
         )
-        
-        human_prompt_parts = [
-            "Job Description JSON:\n{jd_json}",
-            "Resume:\n{resume_text}"
-        ]
-        
-        input_data = {
-            "jd_json": jd_json,
-            "resume_text": resume_text
-        }
-
-        if recruiter_info:
-            human_prompt_parts.insert(1, "Recruiter Info:\n{recruiter_info}")
-            input_data["recruiter_info"] = recruiter_info
-        
-        human_prompt = "\n\n".join(human_prompt_parts) + "\n\nGenerate the email below:"
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("human", human_prompt)
-        ])
-        
-        chain = prompt | self.llm
-        
-        result = chain.invoke(input_data)
-        
-        return result.content if hasattr(result, "content") else str(result)
 
 # Example usage:
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast"
 
 interface EmailResultProps {
   formData: {
-    resume: File | null
+    resumeText: string
     jobDescription: string
     recruiterInfo: string
     generatedEmail: string
@@ -35,8 +35,8 @@ export function EmailResult({ formData, onEmailGenerated, onPrevious, onStartOve
 
     try {
       const formDataToSend = new FormData()
-      if (formData.resume) {
-        formDataToSend.append("file", formData.resume)
+      if (formData.resumeText) {
+        formDataToSend.append("file", formData.resumeText)
       }
 
       // Check if job description is a URL or text

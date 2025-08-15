@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -20,10 +20,32 @@ export function JobDescriptionInput({ value, onChange, onNext, onPrevious }: Job
   const [jobUrl, setJobUrl] = useState("")
   const [jobText, setJobText] = useState(value)
 
+  useEffect(() => {
+    if (value && !jobText && !jobUrl) {
+      if (value.startsWith("http")) {
+        setJobUrl(value)
+        setInputType("url")
+      } else {
+        setJobText(value)
+        setInputType("text")
+      }
+    }
+  }, [value, jobText, jobUrl])
+
   const handleNext = () => {
     const finalValue = inputType === "url" ? jobUrl : jobText
     onChange(finalValue)
     onNext()
+  }
+
+  const handleUrlChange = (newUrl: string) => {
+    setJobUrl(newUrl)
+    onChange(newUrl)
+  }
+
+  const handleTextChange = (newText: string) => {
+    setJobText(newText)
+    onChange(newText)
   }
 
   return (
@@ -54,7 +76,7 @@ export function JobDescriptionInput({ value, onChange, onNext, onPrevious }: Job
               id="job-url"
               placeholder="https://company.com/jobs/software-engineer"
               value={jobUrl}
-              onChange={(e) => setJobUrl(e.target.value)}
+              onChange={(e) => handleUrlChange(e.target.value)}
               className="mt-1"
             />
             <p className="text-sm text-muted-foreground mt-1">
@@ -70,7 +92,7 @@ export function JobDescriptionInput({ value, onChange, onNext, onPrevious }: Job
               id="job-text"
               placeholder="Paste the complete job description here..."
               value={jobText}
-              onChange={(e) => setJobText(e.target.value)}
+              onChange={(e) => handleTextChange(e.target.value)}
               rows={8}
               className="mt-1"
             />

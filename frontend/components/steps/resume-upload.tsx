@@ -43,6 +43,11 @@ export function ResumeUpload({ value, onChange, onNext }: ResumeUploadProps) {
     event.preventDefault()
   }, [])
 
+  const handleButtonClick = useCallback(() => {
+    const input = document.getElementById("resume-file-input") as HTMLInputElement
+    input?.click()
+  }, [])
+
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -74,21 +79,17 @@ export function ResumeUpload({ value, onChange, onNext }: ResumeUploadProps) {
               <div className="text-center">
                 <p className="font-medium mb-1">Drag and drop your resume here</p>
                 <p className="text-sm text-muted-foreground mb-4">or click to browse files</p>
-                <Button variant="outline">
+                <Button variant="outline" onClick={handleButtonClick}>
                   <FileText className="mr-2 h-4 w-4" />
                   Choose PDF File
                 </Button>
               </div>
             </>
           )}
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={handleFileChange}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          />
         </CardContent>
       </Card>
+
+      <input id="resume-file-input" type="file" accept=".pdf" onChange={handleFileChange} className="hidden" />
 
       <div className="flex justify-end">
         <Button onClick={onNext} disabled={!value} className="min-w-24">

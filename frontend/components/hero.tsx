@@ -1,13 +1,15 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Sparkles, Zap, Target } from "lucide-react"
+import { ArrowRight, Sparkles, Zap, Target, Mail, MessageCircle, Users } from "lucide-react"
 
 interface HeroProps {
   onGetStarted: () => void
+  onLinkedInMessage: () => void
+  onReferralRequest: () => void
 }
 
-export function Hero({ onGetStarted }: HeroProps) {
+export function Hero({ onGetStarted, onLinkedInMessage, onReferralRequest }: HeroProps) {
   return (
     <section className="relative overflow-hidden py-20 lg:py-32">
       {/* Background decoration */}
@@ -35,11 +37,19 @@ export function Hero({ onGetStarted }: HeroProps) {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12 animate-fade-in-up">
             <Button size="lg" onClick={onGetStarted} className="group animate-pulse-glow">
-              Start Crafting Emails
+              <Mail className="mr-2 h-4 w-4" />
+              Create Email
               <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Button>
-            <Button variant="outline" size="lg">
-              Watch Demo
+            <Button variant="outline" size="lg" onClick={onLinkedInMessage} className="group bg-transparent">
+              <MessageCircle className="mr-2 h-4 w-4" />
+              LinkedIn Message
+              <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Button>
+            <Button variant="outline" size="lg" onClick={onReferralRequest} className="group bg-transparent">
+              <Users className="mr-2 h-4 w-4" />
+              Request Referral
+              <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Button>
           </div>
 
