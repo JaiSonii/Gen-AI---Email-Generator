@@ -4,96 +4,106 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Copy, RefreshCw, Download, Mail } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { generateEmail } from "@/api/email"
+import { Email, Review } from "@/lib/types"
+import { ReviewResult } from "./review-result"
+import { FuturisticLoader } from "./futurisitic-loader"
 
 interface EmailResultProps {
   formData: {
     resumeText: string
     jobDescription: string
     recruiterInfo: string
-    generatedEmail: string
+    generatedEmail: Email
   }
-  onEmailGenerated: (email: string) => void
+  onEmailGenerated: (email: Email) => void
   onPrevious: () => void
   onStartOver: () => void
 }
 
 export function EmailResult({ formData, onEmailGenerated, onPrevious, onStartOver }: EmailResultProps) {
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [email, setEmail] = useState(formData.generatedEmail)
+  const [isGenerating, setIsGenerating] = useState(true) // Start in generating state
+  const [email, setEmail] = useState("")
+  const [review, setReview] = useState<Review | null>(null) // <-- Add state for review
   const { toast } = useToast()
 
   useEffect(() => {
-    if (!formData.generatedEmail) {
-      generateEmail()
-    }
+    generateEmailHandler()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const generateEmail = async () => {
+  function formatEmail(emailObj: Email): string {
+    if (!emailObj) return ""
+    return [
+      emailObj.subject ? `Subject: ${emailObj.subject}` : "",
+      emailObj.greeting || "",
+      emailObj.body || "",
+      emailObj.closing || "",
+      emailObj.signature || "",
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+  }
+  
+  const openInEmailClient = () => {
+    // ... same as before
+    let subject = "";
+    let body = email;
+    const subjectMatch = email.match(/^Subject:\s*(.*)$/m);
+    if (subjectMatch) {
+      subject = subjectMatch[1];
+      body = email.replace(/^Subject:.*$/m, "").trim();
+    }
+    const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoLink, "_blank");
+  };
+
+
+  const generateEmailHandler = async () => {
     setIsGenerating(true)
-
     try {
-      const formDataToSend = new FormData()
-      if (formData.resumeText) {
-        formDataToSend.append("file", formData.resumeText)
-      }
-
-      // Check if job description is a URL or text
-      const isUrl = formData.jobDescription.startsWith("http")
-      if (isUrl) {
-        formDataToSend.append("jd_url", formData.jobDescription)
-      } else {
-        formDataToSend.append("jd_text", formData.jobDescription)
-      }
-
-      if (formData.recruiterInfo) {
-        // Check if recruiter info is a LinkedIn URL
-        const isLinkedInUrl = formData.recruiterInfo.includes("linkedin.com")
-        if (isLinkedInUrl) {
-          formDataToSend.append("recruiter_url", formData.recruiterInfo)
-        }
-      }
-
-      const response = await fetch("/api/v1/generate-email", {
-        method: "POST",
-        body: formDataToSend,
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to generate email")
-      }
-
-      const data = await response.json()
-      setEmail(data.email)
-      onEmailGenerated(data.email)
-
+      const generated = await generateEmail(
+        formData.resumeText,
+        formData.jobDescription,
+        formData.recruiterInfo
+      )
+      const formatted = formatEmail(generated.email)
+      setEmail(formatted)
+      setReview(generated.review)
+      onEmailGenerated(generated.email)
       toast({
-        title: "Email Generated!",
-        description: "Your personalized email is ready to use.",
+        title: "Success!",
+        description: "Your personalized email and resume review are ready.",
       })
     } catch (error) {
       console.error("Error generating email:", error)
-      // Fallback demo email for development
-      const demoEmail = `Subject: Application for Software Engineer Position
-
-Dear Hiring Manager,
-
-I hope this email finds you well. I am writing to express my strong interest in the Software Engineer position at your company.
-
-With my background in full-stack development and experience with modern technologies, I believe I would be a valuable addition to your team. My resume highlights my expertise in React, Node.js, and cloud technologies, which align perfectly with the requirements outlined in your job posting.
-
-I would welcome the opportunity to discuss how my skills and passion for technology can contribute to your team's success. Thank you for considering my application.
-
-Best regards,
-[Your Name]`
-
-      setEmail(demoEmail)
+      // Fallback demo data for development
+      const demoEmail = {
+        subject: "Application for Software Engineer Position",
+        greeting: "Dear Hiring Manager,",
+        body: `I hope this email finds you well...`,
+        closing: "Best regards",
+        signature: "[Your Name]",
+      }
+      const demoReview: Review = {
+        overall_summary: "This is a demo review. Your resume shows a strong foundation in key areas, but could be better tailored to the job description by including specific keywords.",
+        strengths: ["Strong experience in full-stack development.", "Clear and concise project descriptions."],
+        areas_for_improvement: ["Incorporate more keywords from the job description like 'CI/CD' and 'Agile'.", "Quantify achievements with metrics (e.g., 'improved performance by 20%')."],
+        keyword_analysis: [
+          { keyword: "React", present_in_resume: true, suggestion: "Well highlighted in your projects section." },
+          { keyword: "Node.js", present_in_resume: true, suggestion: "Clearly mentioned in your skills." },
+          { keyword: "CI/CD", present_in_resume: false, suggestion: "Consider adding experience with tools like Jenkins or GitHub Actions if applicable." },
+        ],
+      }
+      setEmail(formatEmail(demoEmail))
+      setReview(demoReview) // <-- Set the demo review state
       onEmailGenerated(demoEmail)
-
       toast({
-        title: "Demo Email Generated",
-        description: "Using demo email for development. Connect your backend for full functionality.",
+        title: "Demo Content Generated",
+        description: "Using demo data for development. Connect your backend for full functionality.",
         variant: "default",
       })
     } finally {
@@ -102,6 +112,7 @@ Best regards,
   }
 
   const copyToClipboard = async () => {
+    // ... same as before
     try {
       await navigator.clipboard.writeText(email)
       toast({
@@ -118,6 +129,7 @@ Best regards,
   }
 
   const downloadEmail = () => {
+    // ... same as before
     const blob = new Blob([email], { type: "text/plain" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -131,64 +143,55 @@ Best regards,
 
   if (isGenerating) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-        <h3 className="text-lg font-semibold mb-2">Generating Your Email...</h3>
-        <p className="text-muted-foreground text-center">
-          Our AI is analyzing your resume and job description to craft the perfect email
-        </p>
-      </div>
+      <FuturisticLoader />
     )
   }
 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h3 className="text-lg font-semibold mb-2">Your Personalized Email</h3>
-        <p className="text-muted-foreground">Review and customize your AI-generated email before sending</p>
+        <h3 className="text-lg font-semibold mb-2">Your AI-Generated Results</h3>
+        <p className="text-muted-foreground">Review your personalized email and resume feedback</p>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <CardTitle className="text-base">Generated Email</CardTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={copyToClipboard}>
-              <Copy className="h-4 w-4 mr-1" />
-              Copy
-            </Button>
-            <Button variant="outline" size="sm" onClick={downloadEmail}>
-              <Download className="h-4 w-4 mr-1" />
-              Download
-            </Button>
-            <Button variant="outline" size="sm" onClick={generateEmail}>
-              <RefreshCw className="h-4 w-4 mr-1" />
-              Regenerate
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            rows={12}
-            className="font-mono text-sm"
-            placeholder="Your generated email will appear here..."
-          />
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="email" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="email">Generated Email</TabsTrigger>
+          <TabsTrigger value="review">Resume Review</TabsTrigger>
+        </TabsList>
 
-      <div className="flex justify-between">
-        <Button variant="outline" onClick={onPrevious}>
-          Previous
-        </Button>
+        <TabsContent value="email">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <CardTitle className="text-base">Email Content</CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={copyToClipboard}><Copy className="h-4 w-4 mr-1" /> Copy</Button>
+                <Button variant="outline" size="sm" onClick={downloadEmail}><Download className="h-4 w-4 mr-1" /> Download</Button>
+                <Button variant="outline" size="sm" onClick={generateEmailHandler}><RefreshCw className="h-4 w-4 mr-1" /> Regenerate</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                rows={15}
+                className="font-mono text-sm"
+                placeholder="Your generated email will appear here..."
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="review">
+            {review ? <ReviewResult review={review} /> : <p>Review data is not available.</p>}
+        </TabsContent>
+      </Tabs>
+
+      <div className="flex justify-between pt-4">
+        <Button variant="outline" onClick={onPrevious}>Previous</Button>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onStartOver}>
-            Start Over
-          </Button>
-          <Button className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            Open in Email Client
-          </Button>
+          <Button variant="outline" onClick={onStartOver}>Start Over</Button>
+          <Button className="flex items-center gap-2" onClick={openInEmailClient}><Mail className="h-4 w-4" /> Open in Email Client</Button>
         </div>
       </div>
     </div>

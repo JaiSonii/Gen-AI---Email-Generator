@@ -7,7 +7,7 @@ import os
 
 router = APIRouter()
 
-@router.post('/generate-email', tags=['Email Generation'])
+@router.post('/generate-email', tags=['Email Generation'], deprecated=True)
 async def generate_email_endpoint(
     file: UploadFile = File(...),
     jd_url: Optional[str] = Form(None),

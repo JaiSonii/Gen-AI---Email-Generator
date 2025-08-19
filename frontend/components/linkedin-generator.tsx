@@ -11,6 +11,7 @@ import { RecruiterInput } from "@/components/steps/recruiter-input"
 import { LinkedInResult } from "@/components/steps/linkedin-result"
 import { parseResume } from "@/api/resume"
 import { jdToJSON } from "@/api/jd"
+import { generateReferral } from "@/api/referral"
 
 interface LinkedInGeneratorProps {
   onBack: () => void
@@ -38,7 +39,7 @@ export function LinkedInGenerator({ onBack }: LinkedInGeneratorProps) {
   const steps = [
     { id: 1, title: "Upload Resume", completed: !!formData.resume },
     { id: 2, title: "Job Description", completed: !!formData.jobDescription },
-    { id: 3, title: "Recruiter Info", completed: !!formData.recruiterInfo },
+    { id: 3, title: "Recruiter/Employee Info", completed: !!formData.recruiterInfo },
     { id: 4, title: "LinkedIn Message", completed: !!formData.generatedMessage },
   ]
 
@@ -91,6 +92,15 @@ export function LinkedInGenerator({ onBack }: LinkedInGeneratorProps) {
     setLoadingMessage("Generating your LinkedIn message...")
 
     try {
+      const result = await generateReferral(finalData.resumeText, finalData.jobDescription, finalData.recruiterInfo, "linkedin message")
+      if (result) {
+        setFormData((prev) => ({ ...prev, generatedMessage: result }))
+        return true
+      }
+      alert("Failed to generate LinkedIn message. Please try again.")
+      return false
+    }
+    catch (error) {
       // For now, generate a demo message - replace with actual API call
       const message = `Hi [Name],
 
@@ -102,9 +112,10 @@ Would you be open to a brief conversation about this role? I'd love to learn mor
 
 Best regards,
 [Your Name]`
-
       setFormData((prev) => ({ ...prev, generatedMessage: message }))
-      return true
+      console.error("Error generating LinkedIn message: ", error)
+      alert("An error occurred while generating the LinkedIn message. Please try again.")
+      return false
     } finally {
       setIsLoading(false)
       setLoadingMessage("")
@@ -164,13 +175,12 @@ Best regards,
               {steps.map((step) => (
                 <div key={step.id} className="flex items-center">
                   <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
-                      step.completed
+                    className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${step.completed
                         ? "bg-blue-600 text-white"
                         : currentStep === step.id
                           ? "bg-blue-100 text-blue-600"
                           : "bg-muted text-muted-foreground"
-                    }`}
+                      }`}
                   >
                     {step.completed ? <CheckCircle className="h-4 w-4" /> : step.id}
                   </div>

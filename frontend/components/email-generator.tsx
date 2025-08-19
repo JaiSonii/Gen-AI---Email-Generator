@@ -11,7 +11,7 @@ import { RecruiterInput } from "@/components/steps/recruiter-input"
 import { EmailResult } from "@/components/steps/email-result"
 import { parseResume } from "@/api/resume"
 import { jdToJSON } from "@/api/jd"
-import { generateEmail } from "@/api/email"
+import { Email } from "@/lib/types"
 
 interface EmailGeneratorProps {
   onBack: () => void
@@ -26,14 +26,14 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     resume: null as File | null,
     jobDescription: "",
     recruiterInfo: "",
-    generatedEmail: "",
+    generatedEmail: {} as Email,
   })
 
   const [finalData, setFinalData] = useState({
     resumeText: "",
     jobDescription: "",
     recruiterInfo: "",
-    generatedEmail: "",
+    generatedEmail: {} as Email,
   })
 
   const steps = [
@@ -87,26 +87,6 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     }
   }
 
-  const handleEmailApi = async (): Promise<boolean> => {
-    if (!finalData.resumeText || !finalData.jobDescription || !finalData.recruiterInfo) return false
-
-    setIsLoading(true)
-    setLoadingMessage("Generating your personalized email...")
-
-    try {
-      const email = await generateEmail(finalData.resumeText, finalData.jobDescription, finalData.recruiterInfo)
-      if (email) {
-        setFormData((prev) => ({ ...prev, generatedEmail: email }))
-        return true
-      }
-      alert("Failed to generate email. Please try again.")
-      return false
-    } finally {
-      setIsLoading(false)
-      setLoadingMessage("")
-    }
-  }
-
   const handleApi = async (step: number): Promise<boolean> => {
     if (step == 1) {
       return handleResumeApi()
@@ -116,7 +96,7 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
     }
     if (step == 3) {
       setFinalData((prev) => ({ ...prev, recruiterInfo: formData.recruiterInfo }))
-      return handleEmailApi()
+      return true
     }
     return true
   }
@@ -228,13 +208,13 @@ export function EmailGenerator({ onBack }: EmailGeneratorProps) {
                     resume: null,
                     jobDescription: "",
                     recruiterInfo: "",
-                    generatedEmail: "",
+                    generatedEmail: {} as Email,
                   })
                   setFinalData({
                     resumeText: "",
                     jobDescription: "",
                     recruiterInfo: "",
-                    generatedEmail: "",
+                    generatedEmail: {} as Email,
                   })
                 }}
               />

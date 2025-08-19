@@ -1,11 +1,18 @@
+import json
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+
 from app.tools.jd_scraper import Scraper
 from app.tools.jd_to_json import JD2JSON
 from app.tools.linkedin import LinkedIn
 from app.tools.resume_parser import ResumeParser
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
-from typing import Optional, Dict
+
+from app.core.models.email_models import EmailAndReview, ReferralAndReview
+
+from typing import Optional, Dict, List
 from threading import Thread
+
 
 class EmailGenerator:
     def __init__(self):
@@ -14,6 +21,8 @@ class EmailGenerator:
         self.linkedin = LinkedIn()
         self.resume_parser = ResumeParser()
         self.llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash')
+        self.__email_parser = JsonOutputParser(pydantic_object=EmailAndReview)
+        self.__referral_parser = JsonOutputParser(pydantic_object=ReferralAndReview)
 
     def _get_jd_json(self, jd_url: Optional[str], jd_text: Optional[str], result_holder: dict):
         """Processes either a JD URL or raw text to get JSON."""
@@ -38,45 +47,77 @@ class EmailGenerator:
         resume_text = self.resume_parser.parse(resume_path)
         result_holder['resume_text'] = resume_text if resume_text else ""
 
-    def craft_email(
+    def craft_referral(
         self,
         resume_text: str,
         job_description: str,
+        recruiter_info: Optional[str] = None,
+        message_type: str = "linkedin message", # or "email"
+    ) -> Dict:
+        """Crafts a linkedin referral message or email based on the job description and resume, and optionally recruiter info or employee info."""
+        prompt = ChatPromptTemplate.from_messages([
+            ("system",
+            "You are an expert career assistant helping a job applicant. "
+            "Your task is to generate a referral request and a resume review based on the provided documents. "
+            "1. **Draft a {message_type} for the applicant to send.** This message must be written in the first person from the applicant's perspective. It should be a professional and concise referral request. **Adhere to the specific format for the message type; for example, an 'email' requires a subject line, while a 'linkedin message' does not.** "
+            "2. **Review the applicant's resume.** Provide detailed, actionable suggestions to better tailor it for this specific job. "
+            "You must strictly follow the provided JSON format instructions to structure your entire output."
+            ),
+            ("human",
+             "{format_instructions}\n\n"
+             "Job Description JSON:\n{jd_json}\n\n"
+             "Resume:\n{resume_text}\n\n"
+             "{recruiter_block}"
+             )
+        ])
+
+        input_data = {
+            "jd_json": job_description,
+            "resume_text": resume_text,
+            "recruiter_block": f"Recruiter Info:\n{recruiter_info}" if recruiter_info else "",
+            "format_instructions": self.__referral_parser.get_format_instructions(),
+            "message_type" : message_type
+        }
+
+        chain = prompt | self.llm | self.__referral_parser
+        result = chain.invoke(input_data)
+        return result
+
+    def craft_email(
+        self,   
+        resume_text: str,
+        job_description: str,
         recruiter_info: Optional[str] = None
-    ) ->str:
-        system_prompt = (
-            "You are an expert career assistant. Given the provided context, "
-            "curate a professional and concise email to the recruiter. "
-            "Highlight the candidate's relevant experience from their resume "
-            "and express genuine interest in the role."
-        )
-        
-        human_prompt_parts = [
-            "Job Description JSON:\n{jd_json}",
-            "Resume:\n{resume_text}"
-        ]
+    ) -> Dict: # Return a dictionary for easier processing
+        """Crafts a professional email and reviews the resume based on the job description."""
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", 
+             "You are an expert career assistant and resume reviewer. "
+             "Given the job description, recruiter profile (if any), and resume, "
+             "1. Curate a professional and concise email to the recruiter, highlighting the candidate's relevant experience and expressing genuine interest in the role. "
+             "2. Review the resume and provide actionable suggestions to improve it for this job, including missing skills, keywords, or experiences that should be highlighted."
+             "You must follow the provided JSON format instructions."
+             ),
+            ("human", 
+             "{format_instructions}\n\n"
+             "Job Description JSON:\n{jd_json}\n\n"
+             "Resume:\n{resume_text}\n\n"
+             "{recruiter_block}"
+             )
+        ])
         
         input_data = {
             "jd_json": job_description,
-            "resume_text": resume_text
+            "resume_text": resume_text,
+            "recruiter_block": f"Recruiter Info:\n{recruiter_info}" if recruiter_info else "",
+            "format_instructions": self.__email_parser.get_format_instructions()
         }
 
-        if recruiter_info:
-            human_prompt_parts.insert(1, "Recruiter Info:\n{recruiter_info}")
-            input_data["recruiter_info"] = recruiter_info
-        
-        human_prompt = "\n\n".join(human_prompt_parts) + "\n\nGenerate the email below:"
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("human", human_prompt)
-        ])
-        
-        chain = prompt | self.llm
-        
+        chain = prompt | self.llm | self.__email_parser
         result = chain.invoke(input_data)
         
-        return result.content if hasattr(result, "content") else str(result)
+        return result
 
     def generate(
         self,
@@ -84,7 +125,7 @@ class EmailGenerator:
         jd_url: Optional[str] = None,
         jd_text: Optional[str] = None,
         recruiter_url: Optional[str] = None
-    ) -> str:
+    ) -> Dict: # Return a dictionary
         if not jd_url and not jd_text:
             raise ValueError("Either a job description URL or text must be provided.")
 
@@ -113,7 +154,7 @@ class EmailGenerator:
         recruiter_info = results.get('recruiter_info', {})
         resume_text = results.get('resume_text', "")
 
-        return self.craft_email(
+        return self.craft_referral(
             resume_text=resume_text,
             job_description=jd_json,
             recruiter_info=recruiter_info
@@ -124,16 +165,7 @@ if __name__ == "__main__":
     eg = EmailGenerator()
     resume_path = "C:\\Users\\jaius\\Downloads\\SDE.pdf" # Replace with your resume path
 
-    # --- Example 1: With JD URL and Recruiter URL ---
-    print("--- Generating Email (with JD URL and Recruiter URL) ---")
-    email_1 = eg.generate(
-        resume_path=resume_path,
-        jd_url="https://www.linkedin.com/jobs/view/4271552272/",
-        recruiter_url="https://www.linkedin.com/in/a-g-somaiah-00146952/"
-    )
-    print(email_1)
-
-    # --- Example 2: With JD Text and NO Recruiter URL ---
+    # --- Example: With JD Text and NO Recruiter URL ---
     print("\n--- Generating Email (with JD Text, no Recruiter) ---")
     job_description_text = """
     Job Title: Senior Python Developer
@@ -143,8 +175,10 @@ if __name__ == "__main__":
     Responsibilities: Design and implement backend services, work with databases, and collaborate with front-end developers.
     Key Qualifications: Proficiency in Python, Django/FastAPI, and PostgreSQL.
     """
-    email_2 = eg.generate(
+    structured_output = eg.generate(
         resume_path=resume_path,
         jd_text=job_description_text
     )
-    print(email_2)
+    
+    # Use json.dumps to pretty-print the structured JSON output
+    print(json.dumps(structured_output, indent=2))

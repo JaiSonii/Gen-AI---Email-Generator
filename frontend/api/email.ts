@@ -1,10 +1,16 @@
 import { globalEnv } from "./global-env"
+import { Email, Review } from "@/lib/types";
+
+interface EmailResponse {
+  email: Email;
+  review: Review;
+}
 
 export async function generateEmail(
   resumeText: string,
   jobDescription: string,
   recruiterInfo: string
-): Promise<string> {
+): Promise<EmailResponse> {
   const formData = new URLSearchParams();
   formData.append("resume_text", resumeText);
   formData.append("job_description", jobDescription);
@@ -24,9 +30,9 @@ export async function generateEmail(
     }
 
     const data = await res.json();
-    return data.email || "";
+    return data as EmailResponse;
   } catch (error) {
     console.error("Error generating email: ", error);
-    return "";
+    throw error;
   }
 }
