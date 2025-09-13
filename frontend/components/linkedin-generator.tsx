@@ -11,7 +11,6 @@ import { RecruiterInput } from "@/components/steps/recruiter-input"
 import { LinkedInResult } from "@/components/steps/linkedin-result"
 import { parseResume } from "@/api/resume"
 import { jdToJSON } from "@/api/jd"
-import { generateReferral } from "@/api/referral"
 
 interface LinkedInGeneratorProps {
   onBack: () => void
@@ -85,43 +84,6 @@ export function LinkedInGenerator({ onBack }: LinkedInGeneratorProps) {
     }
   }
 
-  const handleMessageApi = async (): Promise<boolean> => {
-    if (!finalData.resumeText || !finalData.jobDescription) return false
-
-    setIsLoading(true)
-    setLoadingMessage("Generating your LinkedIn message...")
-
-    try {
-      const result = await generateReferral(finalData.resumeText, finalData.jobDescription, finalData.recruiterInfo, "linkedin message")
-      if (result) {
-        setFormData((prev) => ({ ...prev, generatedMessage: result }))
-        return true
-      }
-      alert("Failed to generate LinkedIn message. Please try again.")
-      return false
-    }
-    catch (error) {
-      // For now, generate a demo message - replace with actual API call
-      const message = `Hi [Name],
-
-I hope this message finds you well. I came across the [Job Title] position at [Company] and was immediately drawn to the opportunity.
-
-With my background in [relevant skills from resume], I believe I could bring significant value to your team. I'm particularly excited about [specific aspect of the job/company].
-
-Would you be open to a brief conversation about this role? I'd love to learn more about the team's current priorities and how I might contribute.
-
-Best regards,
-[Your Name]`
-      setFormData((prev) => ({ ...prev, generatedMessage: message }))
-      console.error("Error generating LinkedIn message: ", error)
-      alert("An error occurred while generating the LinkedIn message. Please try again.")
-      return false
-    } finally {
-      setIsLoading(false)
-      setLoadingMessage("")
-    }
-  }
-
   const handleApi = async (step: number): Promise<boolean> => {
     if (step == 1) {
       return handleResumeApi()
@@ -131,7 +93,7 @@ Best regards,
     }
     if (step == 3) {
       setFinalData((prev) => ({ ...prev, recruiterInfo: formData.recruiterInfo }))
-      return handleMessageApi()
+      return true
     }
     return true
   }

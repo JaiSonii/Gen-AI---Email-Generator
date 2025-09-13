@@ -47,42 +47,6 @@ class EmailGenerator:
         resume_text = self.resume_parser.parse(resume_path)
         result_holder['resume_text'] = resume_text if resume_text else ""
 
-    def craft_referral(
-        self,
-        resume_text: str,
-        job_description: str,
-        recruiter_info: Optional[str] = None,
-        message_type: str = "linkedin message", # or "email"
-    ) -> Dict:
-        """Crafts a linkedin referral message or email based on the job description and resume, and optionally recruiter info or employee info."""
-        prompt = ChatPromptTemplate.from_messages([
-            ("system",
-            "You are an expert career assistant helping a job applicant. "
-            "Your task is to generate a referral request and a resume review based on the provided documents. "
-            "1. **Draft a {message_type} for the applicant to send.** This message must be written in the first person from the applicant's perspective. It should be a professional and concise referral request. **Adhere to the specific format for the message type; for example, an 'email' requires a subject line, while a 'linkedin message' does not.** "
-            "2. **Review the applicant's resume.** Provide detailed, actionable suggestions to better tailor it for this specific job. "
-            "You must strictly follow the provided JSON format instructions to structure your entire output."
-            ),
-            ("human",
-             "{format_instructions}\n\n"
-             "Job Description JSON:\n{jd_json}\n\n"
-             "Resume:\n{resume_text}\n\n"
-             "{recruiter_block}"
-             )
-        ])
-
-        input_data = {
-            "jd_json": job_description,
-            "resume_text": resume_text,
-            "recruiter_block": f"Recruiter Info:\n{recruiter_info}" if recruiter_info else "",
-            "format_instructions": self.__referral_parser.get_format_instructions(),
-            "message_type" : message_type
-        }
-
-        chain = prompt | self.llm | self.__referral_parser
-        result = chain.invoke(input_data)
-        return result
-
     def craft_email(
         self,   
         resume_text: str,
@@ -117,6 +81,62 @@ class EmailGenerator:
         chain = prompt | self.llm | self.__email_parser
         result = chain.invoke(input_data)
         
+        return result
+
+    def craft_referral(
+        self,
+        resume_text: str,
+        job_description: str,
+        recruiter_info: Optional[str] = None,
+        message_type: str = "linkedin message", # or "email"
+    ) -> Dict:
+        """Crafts a linkedin referral message or email based on the job description and resume, and optionally recruiter info or employee info."""
+        
+        # (Optional but good practice) Add a helper for grammar
+        display_message_type = "an email" if "email" in message_type.lower() else "a LinkedIn message"
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system",
+            "You are an expert career assistant helping a job applicant. "
+            "Your task is to generate a **referral request** and a resume review based on the provided documents.\n\n"
+            
+            "⚠️ IMPORTANT CLARIFICATION:\n"
+            "- You are **not writing a recommendation letter.**\n"
+            "- You are writing a **referral request written BY the applicant, in the first person** (e.g., 'I am reaching out to ask...').\n"
+            "- The applicant is politely asking someone else for help with a referral.\n\n"
+
+            "1. **Draft {display_message_type} on behalf of the applicant to send.** "
+            "This message MUST be written strictly in the **first person**. "
+            "It should be professional, concise, and sound like the applicant is requesting help. "
+            "Adhere to the correct format for the message type; for example, an 'email' requires a subject line.\n\n"
+
+            "✅ Example (Correct - first person referral request):\n"
+            "  'Hi [Name], I hope you're doing well. I came across a role at [Company] that strongly aligns with my background, "
+            "and I wanted to ask if you’d be open to referring me.'\n\n"
+
+            "❌ Example (Incorrect - third person recommendation):\n"
+            "  'I am writing to recommend Jai for this position...' (DO NOT write like this.)\n\n"
+
+            "2. **Review the applicant's resume.** Provide detailed, actionable suggestions to better tailor it for this job.\n\n"
+            "You must strictly follow the provided JSON format instructions."
+            ),
+            ("human",
+            "{format_instructions}\n\n"
+            "Job Description JSON:\n{jd_json}\n\n"
+            "Resume:\n{resume_text}\n\n"
+            "{recruiter_block}"
+            )
+        ])
+        input_data = {
+            "jd_json": job_description,
+            "resume_text": resume_text,
+            "recruiter_block": f"Contact Info (for referral):\n{recruiter_info}" if recruiter_info else "",
+            "format_instructions": self.__referral_parser.get_format_instructions(),
+            "display_message_type": display_message_type 
+        }
+
+        chain = prompt | self.llm | self.__referral_parser
+        result = chain.invoke(input_data)
         return result
 
     def generate(

@@ -8,7 +8,7 @@ from app.core.email_generator import EmailGenerator
 
 router = APIRouter()
 
-@router.get("/generate-referral", tags=["referral"])
+@router.post("/generate-referral", tags=["referral"])
 async def generate_referral(
     resume_text: str = Form(...),
     job_description: str = Form(...),

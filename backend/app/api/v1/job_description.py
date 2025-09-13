@@ -12,7 +12,7 @@ class JDTextRequest(BaseModel):
 router = APIRouter()
 
 @router.post('/jd-from-url', tags=['Job Description'])
-def get_job_description(request: JDURLRequest):
+async def get_job_description(request: JDURLRequest):
     """
     Endpoint to scrape a job descrption from a given URL.
     Expects a job URL as input.
@@ -39,7 +39,7 @@ def get_job_description(request: JDURLRequest):
 
 
 @router.post('/jd-from-text', tags=['Job Description'])
-def get_jd_json(request: JDTextRequest):
+async def get_jd_json(request: JDTextRequest):
     """
     Endpoint to convert a job description text to JSON format.
     Expects job description text as input.

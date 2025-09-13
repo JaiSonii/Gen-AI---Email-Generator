@@ -5,7 +5,7 @@ from loguru import logger
 router = APIRouter()
 
 @router.post('/linkedin', tags=["LinkedIn"])
-def search_linkedin(recruiter_url: str):
+async def search_linkedin(recruiter_url: str):
     """
     Endpoint to search for a recruiter on LinkedIn.
     Expects a recruiter URL as input.

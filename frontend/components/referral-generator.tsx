@@ -8,7 +8,7 @@ import { ArrowLeft, CheckCircle, Loader2, Users } from "lucide-react"
 import { ResumeUpload } from "@/components/steps/resume-upload"
 import { JobDescriptionInput } from "@/components/steps/job-description-input"
 import { ReferralContactInput } from "@/components/steps/referral-contact-input"
-import { ReferralResult } from "@/components/steps/referral-result"
+import { ReferralResult } from "./steps/referral-result"
 import { parseResume } from "@/api/resume"
 import { jdToJSON } from "@/api/jd"
 
@@ -31,8 +31,8 @@ export function ReferralGenerator({ onBack }: ReferralGeneratorProps) {
   const [finalData, setFinalData] = useState({
     resumeText: "",
     jobDescription: "",
-    contactInfo: "",
-    generatedMessage: "",
+    recruiterInfo: "",
+    generatedEmail: "",
   })
 
   const steps = [
@@ -84,35 +84,6 @@ export function ReferralGenerator({ onBack }: ReferralGeneratorProps) {
     }
   }
 
-  const handleReferralApi = async (): Promise<boolean> => {
-    if (!finalData.resumeText || !finalData.jobDescription) return false
-
-    setIsLoading(true)
-    setLoadingMessage("Generating your referral request...")
-
-    try {
-      // For now, generate a demo message - replace with actual API call
-      const message = `Hi [Contact Name],
-
-I hope you're doing well! I wanted to reach out because I saw that [Company] is hiring for a [Job Title] position, and I know you have connections there.
-
-I'm really excited about this opportunity because [specific reason related to the role/company]. Given my background in [relevant experience from resume], I believe I'd be a great fit for the team.
-
-Would you be comfortable providing a referral or introduction? I'd be happy to send you my resume and any other information that would be helpful.
-
-I really appreciate you taking the time to consider this, and I understand if you're not able to help.
-
-Thanks so much!
-[Your Name]`
-
-      setFormData((prev) => ({ ...prev, generatedMessage: message }))
-      return true
-    } finally {
-      setIsLoading(false)
-      setLoadingMessage("")
-    }
-  }
-
   const handleApi = async (step: number): Promise<boolean> => {
     if (step == 1) {
       return handleResumeApi()
@@ -122,7 +93,7 @@ Thanks so much!
     }
     if (step == 3) {
       setFinalData((prev) => ({ ...prev, contactInfo: formData.contactInfo }))
-      return handleReferralApi()
+      return true
     }
     return true
   }
@@ -228,7 +199,6 @@ Thanks so much!
             {currentStep === 4 && (
               <ReferralResult
                 formData={finalData}
-                onMessageGenerated={(message) => setFinalData((prev) => ({ ...prev, generatedMessage: message }))}
                 onPrevious={handlePrevious}
                 onStartOver={() => {
                   setCurrentStep(1)
@@ -241,8 +211,8 @@ Thanks so much!
                   setFinalData({
                     resumeText: "",
                     jobDescription: "",
-                    contactInfo: "",
-                    generatedMessage: "",
+                    recruiterInfo: "",
+                    generatedEmail: "",
                   })
                 }}
               />

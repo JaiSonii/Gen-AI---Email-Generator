@@ -1,159 +1,182 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Copy, Download, RefreshCw, Mail, CheckCircle, Users } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Loader2, Copy, RefreshCw, Download, Mail } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { generateEmail } from "@/api/email"
+import { Email, Review } from "@/lib/types"
+import { ReviewResult } from "./review-result"
+import { FuturisticLoader } from "./futurisitic-loader"
+import { generateReferral } from "@/api/referral"
 
-interface ReferralResultProps {
+interface EmailResultProps {
   formData: {
     resumeText: string
     jobDescription: string
-    contactInfo: string
-    generatedMessage: string
+    recruiterInfo: string
+    generatedEmail: string
   }
-  onMessageGenerated: (message: string) => void
   onPrevious: () => void
   onStartOver: () => void
 }
 
-export function ReferralResult({ formData, onMessageGenerated, onPrevious, onStartOver }: ReferralResultProps) {
-  const [message, setMessage] = useState(formData.generatedMessage)
-  const [isRegenerating, setIsRegenerating] = useState(false)
+export function ReferralResult({ formData, onPrevious, onStartOver }: EmailResultProps) {
+  const [isGenerating, setIsGenerating] = useState(true) // Start in generating state
+  const [email, setEmail] = useState("")
+  const [review, setReview] = useState<Review | null>(null) // <-- Add state for review
   const { toast } = useToast()
 
-  const handleCopy = async () => {
+  useEffect(() => {
+    handleGenerate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function formatEmail(emailObj: Email): string {
+    if (!emailObj) return ""
+    return [
+      emailObj.subject ? `Subject: ${emailObj.subject}` : "",
+      emailObj.greeting || "",
+      emailObj.body || "",
+      emailObj.closing || "",
+      emailObj.signature || "",
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+  }
+
+  const openInEmailClient = () => {
+    // ... same as before
+    let subject = "";
+    let body = email;
+    const subjectMatch = email.match(/^Subject:\s*(.*)$/m);
+    if (subjectMatch) {
+      subject = subjectMatch[1];
+      body = email.replace(/^Subject:.*$/m, "").trim();
+    }
+    const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoLink, "_blank");
+  };
+
+
+  const handleGenerate = async () => {
+    if (!formData.resumeText || !formData.jobDescription) return false
+
+    setIsGenerating(true)
+
     try {
-      await navigator.clipboard.writeText(message)
+      const generated = await generateReferral(formData.resumeText, formData.jobDescription, formData.recruiterInfo, "email")
+      const formatted = formatEmail(generated.referral_message as Email)
+      console.log(formatted)
+      setEmail(formatted)
+      console.log(generated.review)
+      setReview(generated.review)
+    }
+    catch (error) {
+      // For now, generate a demo message - replace with actual API call
+      const message = `Hi [Name],
+
+I hope this message finds you well. I came across the [Job Title] position at [Company] and was immediately drawn to the opportunity.
+
+With my background in [relevant skills from resume], I believe I could bring significant value to your team. I'm particularly excited about [specific aspect of the job/company].
+
+Would you be open to a brief conversation about this role? I'd love to learn more about the team's current priorities and how I might contribute.
+
+Best regards,
+[Your Name]`
+      console.error("Error generating LinkedIn message: ", error)
+      alert("An error occurred while generating the LinkedIn message. Please try again.")
+      return false
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const copyToClipboard = async () => {
+    // ... same as before
+    try {
+      await navigator.clipboard.writeText(email)
       toast({
         title: "Copied!",
-        description: "Referral request copied to clipboard",
+        description: "Email copied to clipboard.",
       })
-    } catch (err) {
+    } catch (error) {
       toast({
-        title: "Failed to copy",
-        description: "Please try again",
+        title: "Copy failed",
+        description: "Please select and copy the text manually.",
         variant: "destructive",
       })
     }
   }
 
-  const handleDownload = () => {
-    const blob = new Blob([message], { type: "text/plain" })
+  const downloadEmail = () => {
+    // ... same as before
+    const blob = new Blob([email], { type: "text/plain" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "referral-request.txt"
+    a.download = "generated-email.txt"
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-
-    toast({
-      title: "Downloaded!",
-      description: "Referral request saved as text file",
-    })
   }
 
-  const handleRegenerate = async () => {
-    setIsRegenerating(true)
-
-    // Simulate API call - replace with actual regeneration logic
-    setTimeout(() => {
-      const newMessage = `Hey [Contact Name],
-
-Hope you're doing great! I wanted to reach out about an opportunity I'm really excited about.
-
-I saw that [Company] has an opening for [Job Title], and I remembered you work there. Based on my experience in [relevant skills], I think I could be a strong candidate for this role.
-
-I know referrals can be a big ask, but would you be open to having a quick chat about the role and potentially putting in a good word for me? I'd be happy to send over my resume and answer any questions.
-
-No worries at all if this isn't something you're comfortable with - I completely understand!
-
-Thanks for considering it,
-[Your Name]`
-
-      setMessage(newMessage)
-      onMessageGenerated(newMessage)
-      setIsRegenerating(false)
-
-      toast({
-        title: "Message regenerated!",
-        description: "Your referral request has been updated",
-      })
-    }, 2000)
-  }
-
-  const handleSendEmail = () => {
-    const subject = encodeURIComponent("Referral Request - [Job Title] at [Company]")
-    const body = encodeURIComponent(message)
-    window.open(`mailto:?subject=${subject}&body=${body}`)
+  if (isGenerating) {
+    return (
+      <FuturisticLoader />
+    )
   }
 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <CheckCircle className="h-6 w-6 text-purple-600" />
-          <h3 className="text-lg font-semibold">Your Referral Request is Ready!</h3>
+        <h3 className="text-lg font-semibold mb-2">Your AI-Generated Results</h3>
+        <p className="text-muted-foreground">Review your personalized email and resume feedback</p>
+      </div>
+
+      <Tabs defaultValue="email" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="email">Generated Email</TabsTrigger>
+          <TabsTrigger value="review">Resume Review</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="email">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <CardTitle className="text-base">Email Content</CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={copyToClipboard}><Copy className="h-4 w-4 mr-1" /> Copy</Button>
+                <Button variant="outline" size="sm" onClick={downloadEmail}><Download className="h-4 w-4 mr-1" /> Download</Button>
+                <Button variant="outline" size="sm" onClick={handleGenerate}><RefreshCw className="h-4 w-4 mr-1" /> Regenerate</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                rows={15}
+                className="font-mono text-sm"
+                placeholder="Your generated email will appear here..."
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="review">
+          {review ? <ReviewResult review={review} /> : <p>Review data is not available.</p>}
+        </TabsContent>
+      </Tabs>
+
+      <div className="flex justify-between pt-4">
+        <Button variant="outline" onClick={onPrevious}>Previous</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onStartOver}>Start Over</Button>
+          <Button className="flex items-center gap-2" onClick={openInEmailClient}><Mail className="h-4 w-4" /> Open in Email Client</Button>
         </div>
-        <p className="text-muted-foreground">Review and customize your personalized referral request below</p>
-      </div>
-
-      <Card className="border-purple-200 bg-purple-50/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-purple-700">
-            <Users className="h-5 w-5" />
-            Generated Referral Request
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            rows={12}
-            className="font-mono text-sm bg-white"
-            placeholder="Your referral request will appear here..."
-          />
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Button onClick={handleCopy} variant="outline" className="flex items-center gap-2 bg-transparent">
-          <Copy className="h-4 w-4" />
-          Copy
-        </Button>
-
-        <Button onClick={handleDownload} variant="outline" className="flex items-center gap-2 bg-transparent">
-          <Download className="h-4 w-4" />
-          Download
-        </Button>
-
-        <Button
-          onClick={handleRegenerate}
-          variant="outline"
-          disabled={isRegenerating}
-          className="flex items-center gap-2 bg-transparent"
-        >
-          <RefreshCw className={`h-4 w-4 ${isRegenerating ? "animate-spin" : ""}`} />
-          {isRegenerating ? "Generating..." : "Regenerate"}
-        </Button>
-
-        <Button onClick={handleSendEmail} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700">
-          <Mail className="h-4 w-4" />
-          Send Email
-        </Button>
-      </div>
-
-      <div className="flex justify-between">
-        <Button variant="outline" onClick={onPrevious}>
-          Previous
-        </Button>
-        <Button onClick={onStartOver} variant="outline">
-          Create Another Request
-        </Button>
       </div>
     </div>
   )

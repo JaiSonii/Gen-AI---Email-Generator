@@ -17,6 +17,7 @@ async def process_resume(file: UploadFile = File(...)):
             f.write(contents)
         parser = ResumeParser()
         resume_text = parser.parse(temp_path)
+        print(resume_text)
         return JSONResponse(content={"resume_text": resume_text})
     except Exception as e:
         logger.error(f"Error parsing resume: {e}")

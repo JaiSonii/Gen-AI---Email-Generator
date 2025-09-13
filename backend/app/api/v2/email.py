@@ -8,7 +8,7 @@ router = APIRouter()
 
 
 @router.post('/generate-email', tags=['Email Generation'])
-def generate_email(
+async def generate_email(
     resume_text: str = Form(...),
     job_description: str = Form(...),
     recruiter_info: Optional[str] = Form(None)

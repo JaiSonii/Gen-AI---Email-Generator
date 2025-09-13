@@ -19,3 +19,15 @@ export interface Review {
   areas_for_improvement : string[]
   keyword_analysis : KeywordAnalysis[]
 }
+
+export interface LinkedInMessage{
+  greeting : string
+  body : string
+  closing : string
+  signature : string
+}
+
+export interface LinkedIn{
+  referral_message : LinkedInMessage | Email,
+  review : Review
+}

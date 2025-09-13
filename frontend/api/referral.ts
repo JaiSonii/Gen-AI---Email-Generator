@@ -1,3 +1,4 @@
+import { LinkedIn } from "@/lib/types";
 import { globalEnv } from "./global-env";
 
 export async function generateReferral(
@@ -5,7 +6,7 @@ export async function generateReferral(
   jobDescription: string,
   recruiterInfo: string,
   messageType: "email" | "linkedin message"
-): Promise<string> {
+): Promise<LinkedIn> {
   const formData = new URLSearchParams();
   formData.append("resume_text", resumeText);
   formData.append("job_description", jobDescription);
@@ -26,9 +27,9 @@ export async function generateReferral(
     }
 
     const data = await res.json();
-    return data.referral_message || "";
+    return data
   } catch (error) {
     console.error("Error generating referral: ", error);
-    return "";
+    return {} as LinkedIn;
   }
 }
