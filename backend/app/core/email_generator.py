@@ -20,7 +20,7 @@ class EmailGenerator:
         self.jd2json = JD2JSON()
         self.linkedin = LinkedIn()
         self.resume_parser = ResumeParser()
-        self.llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash')
+        self.llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
         self.__email_parser = JsonOutputParser(pydantic_object=EmailAndReview)
         self.__referral_parser = JsonOutputParser(pydantic_object=ReferralAndReview)
 
