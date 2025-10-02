@@ -46,7 +46,7 @@ Respond only with the JSON object.
 class JD2JSON():
     def __init__(self, system_msg_str: str = SYSTEM_MESSAGE) -> None:
         load_dotenv()
-        self.__llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash', google_api_key=os.getenv('GOOGLE_API_KEY'))
+        self.__llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash', google_api_key=os.getenv('GOOGLE_API_KEY'))
         self._system_message_str = system_msg_str
         self.__parser = JsonOutputParser(pydantic_object=JobListing)
         self.__prompt_template: ChatPromptTemplate | None = None
